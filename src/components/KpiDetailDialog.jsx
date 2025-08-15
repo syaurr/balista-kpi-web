@@ -1,13 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { fetchKpiDetailsForArea, fetchAreaNote, saveAreaNote } from '../app/actions';
+import { fetchKpiDetailsForArea, fetchAreaNote } from '../app/actions';
 
-export default function KpiDetailDialog({ areaName, onClose, userRole }) {
+export default function KpiDetailDialog({ areaName, onClose }) {
     const [details, setDetails] = useState([]);
     const [note, setNote] = useState('');
     const [loading, setLoading] = useState(true);
-
-    const isAdmin = userRole === 'Admin';
 
     useEffect(() => {
         async function loadData() {
@@ -24,44 +22,62 @@ export default function KpiDetailDialog({ areaName, onClose, userRole }) {
         loadData();
     }, [areaName]);
 
-    const handleSaveNote = async () => {
-        const { success, error } = await saveAreaNote(areaName, note);
-        if (success) {
-            alert('Catatan berhasil disimpan!');
-            onClose(true);
-        } else {
-            alert('Error: ' + error);
-        }
-    };
-
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl flex flex-col" style={{height: '90vh'}}>
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl flex flex-col" style={{height: '90vh'}}>
                 <div className="p-6 border-b">
-                    <h2 className="text-xl font-bold text-[#6b1815]">Detail & Catatan untuk Area: {areaName}</h2>
+                    <h2 className="text-xl font-bold text-[#6b1815]">Detail KPI untuk Area: {areaName}</h2>
                 </div>
-                <div className="p-6 flex-grow overflow-y-auto">
-                    {/* ... (Tabel detail tidak berubah) ... */}
+                
+                {/* --- AWAL PERUBAHAN: Gabungkan Tabel & Catatan --- */}
+                <div className="flex-grow overflow-y-auto p-6 space-y-6">
+                    <div>
+                        <h3 className="font-semibold text-gray-800 mb-2">Detail KPI:</h3>
+                        {loading ? <p>Loading...</p> : (
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-12">No</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama KPI</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-40">Frekuensi</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-24">Skor Aktual</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-20">Bobot</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-24">Nilai Akhir</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {details.map((item, index) => (
+                                        <tr key={index}>
+                                            <td className="px-4 py-4 text-center text-sm">{index + 1}</td>
+                                            <td className="px-4 py-4 text-sm text-gray-700">{item.kpi_deskripsi}</td>
+                                            <td className="px-4 py-4 text-sm">{item.frekuensi}</td>
+                                            <td className="px-4 py-4 text-sm text-center">{item.skor_aktual}</td>
+                                            <td className="px-4 py-4 text-sm text-center">{item.bobot}%</td>
+                                            <td className="px-4 py-4 text-sm text-center font-semibold">{parseFloat(item.nilai_akhir).toFixed(2)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                    <div>
+                        <h3 className="font-semibold text-gray-800 mb-2">Catatan/Rekomendasi untuk Area Ini:</h3>
+                        <textarea 
+                            value={note}
+                            rows="5"
+                            className="w-full border rounded-md p-2 bg-gray-100"
+                            placeholder="Tidak ada catatan."
+                            readOnly={true} // <-- DIKUNCI DI SINI
+                        />
+                    </div>
                 </div>
-                <div className="p-6 border-t bg-gray-50">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Catatan/Rekomendasi untuk Area Ini</label>
-                    <textarea 
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                        rows="4"
-                        className="w-full border rounded-md p-2"
-                        placeholder={isAdmin ? "Tuliskan catatan atau rekomendasi..." : "Tidak ada catatan."}
-                        readOnly={!isAdmin} // <-- KUNCI PERBAIKAN DI SINI
-                    />
-                </div>
-                <div className="p-4 bg-gray-100 flex justify-end space-x-3">
-                    <button onClick={() => onClose(false)} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300">Tutup</button>
-                    {/* Tombol Simpan hanya muncul untuk Admin */}
-                    {isAdmin && (
-                        <button onClick={handleSaveNote} className="bg-[#033f3f] text-white px-4 py-2 rounded-lg font-bold hover:bg-[#022c2c]">
-                            Simpan Catatan
-                        </button>
-                    )}
+                {/* --- AKHIR PERUBAHAN --- */}
+
+                <div className="p-4 bg-gray-100 flex justify-end">
+                    <button onClick={() => onClose(false)} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300">
+                        Tutup
+                    </button>
+                    {/* Tombol Simpan Dihapus Total */}
                 </div>
             </div>
         </div>

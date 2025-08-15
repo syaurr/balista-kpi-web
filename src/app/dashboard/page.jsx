@@ -10,7 +10,7 @@ export default async function DashboardPage() {
 
   let totalNilaiAkhir = data.rekap.reduce((sum, item) => sum + parseFloat(item.nilai_akhir || 0), 0);
   let totalBobotBulanan = data.rekap.reduce((sum, item) => {
-    if (item.frekuensi && ['bulanan', 'mingguan', 'harian'].some(f => item.frekuensi.toLowerCase().includes(f))) {
+    if (item.frekuensi && ['bulanan', 'mingguan', 'harian', 'per kebutuhan', 'per kasus'].some(f => item.frekuensi.toLowerCase().includes(f))) {
         return sum + item.bobot;
     }
     return sum;
@@ -31,7 +31,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         <div className="bg-white p-6 rounded-xl shadow-md">
             <h3 className="text-lg font-bold text-[#6b1815] mb-3">Catatan Umum dari Penilai</h3>
-            <p className="text-gray-600 italic">{data.penilaian_summary}</p>
+            <p className="text-gray-600 italic">{data.summary.catatan_kpi}</p>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-md">
             <h3 className="text-lg font-bold text-[#6b1815] mb-3">Rekomendasi Pengembangan</h3>
@@ -42,29 +42,37 @@ export default async function DashboardPage() {
         </div>
       </div>
       
+      {/* --- AWAL PERUBAHAN TABEL REKAPITULASI --- */}
       <section className="bg-white p-6 rounded-xl shadow-md mb-8">
           <h3 className="text-lg font-bold text-[#6b1815] mb-4">Rekapitulasi Semua KPI</h3>
-          <div className="overflow-x-auto max-h-96">
+          <div className="overflow-x-auto max-h-[400px]"> {/* Beri tinggi maksimal agar bisa di-scroll */}
               <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-[#6b1815] text-white sticky top-0">
                       <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium uppercase">KPI</th>
-                          <th className="px-4 py-3 text-center text-xs font-medium uppercase">Skor Aktual</th>
-                          <th className="px-4 py-3 text-center text-xs font-medium uppercase">Nilai Akhir</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium uppercase w-12">No</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase">Nama KPI</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase w-40">Frekuensi</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium uppercase w-24">Skor Aktual</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium uppercase w-20">Bobot</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium uppercase w-24">Nilai Akhir</th>
                       </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                       {data.rekap.map((item, index) => (
-                          <tr key={index}>
+                          <tr key={index} className="hover:bg-gray-50">
+                              <td className="px-4 py-4 text-center">{index + 1}</td>
                               <td className="px-4 py-4">{item.kpi_deskripsi}</td>
+                              <td className="px-4 py-4">{item.frekuensi}</td>
                               <td className="px-4 py-4 text-center">{item.skor_aktual}</td>
-                              <td className="px-4 py-4 text-center">{parseFloat(item.nilai_akhir || 0).toFixed(2)}</td>
+                              <td className="px-4 py-4 text-center">{item.bobot}%</td>
+                              <td className="px-4 py-4 text-center font-semibold">{parseFloat(item.nilai_akhir || 0).toFixed(2)}</td>
                           </tr>
                       ))}
                   </tbody>
               </table>
           </div>
       </section>
+      {/* --- AKHIR PERUBAHAN TABEL REKAPITULASI --- */}
 
       <section className="bg-white p-6 rounded-xl shadow-md">
         <h3 className="text-lg font-bold text-[#6b1815] mb-4">Kinerja per Area</h3>
