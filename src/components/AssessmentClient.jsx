@@ -48,7 +48,7 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const [monthInput, setMonthInput] = useState(currentMonth);
     const [yearInput, setYearInput] = useState(currentYear);
 
-    const { kpis, scores, generalNote, recommendations, areaScores } = initialAssessmentData || { 
+    const { kpis, scores, generalNote, recommendations, areaScores: initialAreaScores } = initialAssessmentData || { 
         kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [] 
     };
     
@@ -60,8 +60,6 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const [message, setMessage] = useState(null);
     const [linkModalKpi, setLinkModalKpi] = useState(null);
 
-    // app/components/AssessmentClient.jsx
-
     const handleSelectionChange = () => {
         const params = new URLSearchParams();
         if (employeeInput) params.set('karyawanId', employeeInput);
@@ -72,20 +70,53 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
         window.location.href = `/dashboard/admin/assessment?${params.toString()}`;
     };
 
-    const { totalNilaiAkhir, nilaiProporsional } = useMemo(() => {
-        let total = 0;
-        let totalBobot = 0;
-        if (!kpis || kpis.length === 0) return { totalNilaiAkhir: 0, nilaiProporsional: 0 };
+    const { totalNilaiAkhir, nilaiProporsional, areaScores } = useMemo(() => {
+        // Guard clause: Selalu kembalikan objek dengan struktur yang benar
+        if (!kpis || kpis.length === 0) {
+            return { totalNilaiAkhir: 0, nilaiProporsional: 0, areaScores: [] };
+        }
+        
+        let totalNilaiBulanan = 0;
+        let totalBobotBulanan = 0;
+        const areaData = {};
+        const kpisForProportionalCalc = [];
+
         kpis.forEach(kpi => {
             const score = currentScores[kpi.id] || 0;
             const nilai = score * (kpi.bobot / 100.0);
-            total += nilai;
-            if (kpi.frekuensi && ['bulanan', 'mingguan', 'harian', 'per kebutuhan', 'per kasus'].some(f => kpi.frekuensi.toLowerCase().includes(f))) {
-                totalBobot += kpi.bobot;
+            
+            const isMonthlyKPI = kpi.frekuensi && ['bulanan', 'mingguan', 'harian', 'per kebutuhan', 'per kasus'].some(f => kpi.frekuensi.toLowerCase().includes(f));
+
+            if (isMonthlyKPI) {
+                totalNilaiBulanan += nilai;
+                // Hanya tambahkan bobot jika KPI ini benar-benar memiliki skor (sudah dinilai)
+                if (currentScores[kpi.id] !== undefined && currentScores[kpi.id] !== null) {
+                    totalBobotBulanan += kpi.bobot;
+                    kpisForProportionalCalc.push(`${kpi.kpi_deskripsi} (Bobot: ${kpi.bobot}%)`);
+                }
+            }
+            
+            const areaName = kpi.area_kerja || 'Lain-lain';
+            if (!areaData[areaName]) {
+                areaData[areaName] = { totalScore: 0, count: 0 };
+            }
+            if (score > 0) {
+                areaData[areaName].totalScore += score;
+                areaData[areaName].count += 1;
             }
         });
-        const proporsional = totalBobot > 0 ? (total / (totalBobot / 100.0)) : 0;
-        return { totalNilaiAkhir: total, nilaiProporsional: proporsional };
+        
+        console.log("DEBUG: KPI yang dihitung untuk Nilai Proporsional:", kpisForProportionalCalc);
+        console.log("DEBUG: Total Bobot yang dihitung di Web:", totalBobotBulanan);
+
+        const proporsional = totalBobotBulanan > 0 ? (totalNilaiBulanan / (totalBobotBulanan / 100.0)) : 0;
+        const finalAreaScores = Object.entries(areaData).map(([area, data]) => ({
+            area,
+            average_score: data.count > 0 ? data.totalScore / data.count : 0
+        }));
+
+        // Selalu kembalikan objek dengan struktur yang benar
+        return { totalNilaiAkhir: totalNilaiBulanan, nilaiProporsional: proporsional, areaScores: finalAreaScores };
     }, [currentScores, kpis]);
 
     const sortedKpis = useMemo(() => {
