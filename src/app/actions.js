@@ -333,8 +333,34 @@ export async function getAssessmentDataLogic(supabase, karyawanId, periode) {
 }
 
 export async function fetchAssessmentData(karyawanId, periode) {
-    const supabase = createClient(cookies());
-    return getAssessmentDataLogic(supabase, karyawanId, periode);
+    if (!karyawanId || !periode) return { kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [] };
+    const supabase = createClient();
+
+    const { data: karyawan } = await supabase.from('karyawan').select('posisi').eq('id', karyawanId).single();
+    if (!karyawan) return { kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [] };
+
+    const [kpisResult, scoresResult, summaryResult, recommendationsResult, areaScoresResult] = await Promise.all([
+        supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', karyawan.posisi).eq('is_active', true).order('area_kerja'),
+        supabase.from('penilaian_kpi').select('kpi_master_id, nilai').eq('karyawan_id', karyawanId).eq('periode', periode),
+        supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single(),
+        supabase.from('kpi_summary_recommendations').select('id, rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
+        supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId })
+    ]);
+    
+    if (kpisResult.error) console.error("KPI Fetch Error:", kpisResult.error);
+
+    const scoresMap = scoresResult.data?.reduce((acc, score) => {
+        acc[score.kpi_master_id] = score.nilai;
+        return acc;
+    }, {}) || {};
+
+    return {
+        kpis: kpisResult.data || [],
+        scores: scoresMap,
+        generalNote: summaryResult.data?.catatan_kpi || '',
+        recommendations: recommendationsResult.data || [],
+        areaScores: areaScoresResult.data || []
+    };
 }
 
 export async function getDashboardData() {
@@ -370,6 +396,8 @@ export async function saveFullAssessment(formData) {
     if (!karyawanId || !periode) return { error: 'Data tidak lengkap.' };
 
     const { data: kpis } = await supabase.from('kpi_master').select('id, kpi_deskripsi, bobot').in('id', Object.keys(scoresData));
+    if (!kpis) return { error: 'Gagal mengambil data master KPI untuk snapshot.' };
+
     const assessmentsToUpsert = kpis.map(kpi => ({
         karyawan_id: karyawanId, kpi_master_id: kpi.id, periode: periode, nilai: scoresData[kpi.id],
         tanggal_penilaian: new Date().toISOString(), kpi_deskripsi: kpi.kpi_deskripsi, bobot: kpi.bobot
@@ -383,7 +411,7 @@ export async function saveFullAssessment(formData) {
     
     if (assessmentResult.error || summaryResult.error) return { error: 'Gagal menyimpan penilaian.' };
     
-    revalidatePath('/dashboard');
+    revalidatePath('/dashboard/admin/assessment');
     return { success: 'Penilaian berhasil disimpan!' };
 }
 
