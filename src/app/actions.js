@@ -231,7 +231,6 @@ export async function addOrUpdateKpi(formData) {
         frekuensi: formData.get('frekuensi'),
         bobot: parseInt(formData.get('bobot'), 10),
         target_standar: formData.get('target_standar'),
-        // Kita tidak lagi menyimpan link di sini
     };
 
     let kpiId = id;
@@ -257,23 +256,22 @@ export async function addOrUpdateKpi(formData) {
     
     // --- PROSES UPDATE LINK DI TABEL kpi_links ---
     if (kpiId) {
-        // 1. Hapus semua link lama yang terkait dengan KPI ini
         const { error: deleteError } = await supabase.from('kpi_links').delete().eq('kpi_master_id', kpiId);
         if (deleteError) {
             console.error('KPI link delete error:', deleteError);
             return { error: 'Gagal menghapus link lama.' };
         }
         
-        // 2. Tambahkan link baru jika ada
         if (linksString) {
             const linksArray = linksString.split('\n')
                 .map(link => link.trim())
                 .filter(link => link.length > 0)
+                // --- AWAL PERBAIKAN: Hapus kolom 'deskripsi' ---
                 .map(link => ({
                     kpi_master_id: kpiId,
-                    link_url: link,
-                    deskripsi: 'Link Referensi' // Deskripsi default
+                    link_url: link
                 }));
+            // --- AKHIR PERBAIKAN ---
             
             if (linksArray.length > 0) {
                 const { error: insertLinksError } = await supabase.from('kpi_links').insert(linksArray);
