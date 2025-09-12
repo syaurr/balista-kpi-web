@@ -129,6 +129,46 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
         });
     }, [kpis]);
 
+    const chartAreaScores = useMemo(() => {
+    if (!areaScores || !kpis || areaScores.length === 0 || kpis.length === 0) {
+        return [];
+    }
+
+    // 1. Buat pemetaan dari area_kerja -> area
+    const areaKerjaToAreaMap = new Map();
+        kpis.forEach(kpi => {
+            if (kpi.area_kerja && kpi.area) {
+                areaKerjaToAreaMap.set(kpi.area_kerja, kpi.area);
+            }
+        });
+
+        // 2. Kelompokkan skor berdasarkan 'Area' umum
+        const groupedByArea = {}; // Format: { 'Kinerja & Evaluasi': { scores: [85, 90], count: 2 } }
+        
+        areaScores.forEach(scoreItem => {
+            const specificArea = scoreItem.area; // Ini adalah 'area_kerja' dari RPC
+            const generalArea = areaKerjaToAreaMap.get(specificArea);
+
+            if (generalArea) {
+                if (!groupedByArea[generalArea]) {
+                    groupedByArea[generalArea] = { scores: [], count: 0 };
+                }
+                groupedByArea[generalArea].scores.push(scoreItem.average_score);
+                groupedByArea[generalArea].count += 1;
+            }
+        });
+
+        // 3. Hitung rata-rata final untuk setiap 'Area' umum
+        return Object.entries(groupedByArea).map(([areaName, data]) => {
+            const sum = data.scores.reduce((total, score) => total + score, 0);
+            return {
+                area: areaName,
+                average_score: sum / data.count,
+            };
+        });
+
+    }, [areaScores, kpis]);
+
     const handleScoreChange = (kpiId, value) => {
         setCurrentScores(prev => ({ ...prev, [kpiId]: Math.max(0, Math.min(100, parseInt(value, 10) || 0)) }));
     };
@@ -223,9 +263,9 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                         </h2>
                         
                         <div className="space-y-8">
-
+                            
                             <div className="h-96 w-full">
-                                <AreaDonutChart areaScores={areaScores} />
+                                <AreaDonutChart areaScores={chartAreaScores} />
                             </div>
 
                             {/* Bagian Rekomendasi */}
