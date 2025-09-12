@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usulan Penyesuaian KPI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 p-4 sm:p-6 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <div class="mb-6 text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900">Usulan Penyesuaian KPI</h1>
+            <p class="text-gray-600 mt-2">Gabungan KPI lama dan usulan KPI baru dengan penyesuaian bobot.</p>
+        </div>
+        
+        <!-- Container untuk tabel agar bisa scroll di layar kecil -->
+        <div class="overflow-x-auto bg-white rounded-lg shadow">
+            <table class="w-full text-sm text-left text-gray-600">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 min-w-[200px]">Area / Tanggung Jawab</th>
+                        <th scope="col" class="px-6 py-3 min-w-[250px]">KPI (Indikator Kinerja)</th>
+                        <th scope="col" class="px-6 py-3 min-w-[250px]">Target / Standar</th>
+                        <th scope="col" class="px-6 py-3 min-w-[200px]">Metode Pengukuran</th>
+                        <th scope="col" class="px-6 py-3">Frekuensi</th>
+                        <th scope="col" class="px-6 py-3">Bobot (%)</th>
+                        <th scope="col" class="px-6 py-3">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Baris data tabel -->
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">Administrasi Umum</td>
+                        <td class="px-6 py-4">Kelengkapan dan keterbaruan dokumen korespondensi, SOP, dan pelatihan karyawan</td>
+                        <td class="px-6 py-4">100% dokumen terarsip dan terupdate</td>
+                        <td class="px-6 py-4">Audit dokumen (Power Point)</td>
+                        <td class="px-6 py-4">Per Kebutuhan</td>
+                        <td class="px-6 py-4 font-semibold text-center">5%</td>
+                        <td class="px-6 py-4"><span class="bg-yellow-100 text-yellow-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Disesuaikan</span></td>
+                    </tr>
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">Administrasi Umum</td>
+                        <td class="px-6 py-4">Pemeliharaan data personalia dan HR filing</td>
+                        <td class="px-6 py-4">≥ 98% data terupdate</td>
+                        <td class="px-6 py-4">Audit file SDM (Google Spreadsheet)</td>
+                        <td class="px-6 py-4">Bulanan</td>
+                        <td class="px-6 py-4 font-semibold text-center">10%</td>
+                        <td class="px-6 py-4"><span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Tetap</span></td>
+                    </tr>
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">Dukungan SDM</td>
+                        <td class="px-6 py-4">Pengelolaan sistem administrasi HR</td>
+                        <td class="px-6 py-4">≥ 98% proses berjalan tanpa keterlambatan</td>
+                        <td class="px-6 py-4">Airtable, Apps, Website</td>
+                        <td class="px-6 py-4">Bulanan</td>
+                        <td class="px-6 py-4 font-semibold text-center">10%</td>
+                        <td class="px-6 py-4"><span class="bg-yellow-100 text-yellow-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Disesuaikan</span></td>
+                    </tr>
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">Dukungan SDM</td>
+                        <td class="px-6 py-4">Proses onboarding dan rekrutmen</td>
+                        <td class="px-6 py-4">100% onboarding sesuai SOP</td>
+                        <td class="px-6 py-4">Airtable, Checklist onboarding (Google Spreadsheet)</td>
+                        <td class="px-6 py-4">Per Kebutuhan</td>
+                        <td class="px-6 py-4 font-semibold text-center">10%</td>
+                        <td class="px-6 py-4"><span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Tetap</span></td>
+                    </tr>
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">Dukungan SDM</td>
+                        <td class="px-6 py-4">Respons terhadap permintaan administrasi karyawan</td>
+                        <td class="px-6 py-4">≤ 2 hari kerja</td>
+                        <td class="px-6 py-4">Log permintaan internal (WhatsApp)</td>
+                        <td class="px-6 py-4">Bulanan</td>
+                        <td class="px-6 py-4 font-semibold text-center">5%</td>
+                        <td class="px-6 py-4"><span class="bg-yellow-100 text-yellow-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Disesuaikan</span></td>
+                    </tr>
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">Dukungan SDM</td>
+                        <td class="px-6 py-4">Proses administrasi penggajian</td>
+                        <td class="px-6 py-4">H-1 sebelum penggajian</td>
+                        <td class="px-6 py-4">Laporan payroll (Google Spreadsheet)</td>
+                        <td class="px-6 py-4">Bulanan</td>
+                        <td class="px-6 py-4 font-semibold text-center">10%</td>
+                        <td class="px-6 py-4"><span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Tetap</span></td>
+                    </tr>
+                     <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">Dukungan Proyek & Komunikasi</td>
+                        <td class="px-6 py-4">Koordinasi proyek internal dan eksternal</td>
+                        <td class="px-6 py-4">≥ 90% proyek tepat waktu</td>
+                        <td class="px-6 py-4">Laporan kemajuan proyek (Power Point)</td>
+                        <td class="px-6 py-4">Per Kebutuhan</td>
+                        <td class="px-6 py-4 font-semibold text-center">5%</td>
+                        <td class="px-6 py-4"><span class="bg-yellow-100 text-yellow-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Disesuaikan</span></td>
+                    </tr>
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">Dukungan Pemasaran</td>
+                        <td class="px-6 py-4">Koordinasi kegiatan promosi dan kampanye (jika ada)</td>
+                        <td class="px-6 py-4">Jumlah event/kampanye yang berjalan lancar tanpa kendala besar</td>
+                        <td class="px-6 py-4">Feedback kegiatan</td>
+                        <td class="px-6 py-4">Per Kebutuhan</td>
+                        <td class="px-6 py-4 font-semibold text-center">5%</td>
+                        <td class="px-6 py-4"><span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Tetap</span></td>
+                    </tr>
+                    <!-- KPI Baru -->
+                    <tr class="bg-green-50 border-b border-green-200 hover:bg-green-100">
+                        <td class="px-6 py-4 font-medium text-green-900">Pengembangan Sistem</td>
+                        <td class="px-6 py-4 font-medium">Efektivitas dan Efisiensi Sistem Rekrutmen Digital</td>
+                        <td class="px-6 py-4">Peningkatan efisiensi rekrutmen sebesar 50% (time-to-hire)</td>
+                        <td class="px-6 py-4">Analisis data rekrutmen sebelum dan sesudah implementasi</td>
+                        <td class="px-6 py-4">Per Proyek</td>
+                        <td class="px-6 py-4 font-semibold text-center">10%</td>
+                        <td class="px-6 py-4"><span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Baru</span></td>
+                    </tr>
+                    <tr class="bg-green-50 border-b border-green-200 hover:bg-green-100">
+                        <td class="px-6 py-4 font-medium text-green-900">Pengembangan Sistem</td>
+                        <td class="px-6 py-4 font-medium">Penyelesaian dan Implementasi Sistem Penilaian Individu Berbasis Web</td>
+                        <td class="px-6 py-4">Sistem berfungsi 100% sesuai fitur yang disepakati dan diimplementasikan pada kuartal yang ditentukan</td>
+                        <td class="px-6 py-4">UAT (User Acceptance Test), Laporan Proyek, Demo Aplikasi</td>
+                        <td class="px-6 py-4">Per Proyek</td>
+                        <td class="px-6 py-4 font-semibold text-center">15%</td>
+                        <td class="px-6 py-4"><span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Baru</span></td>
+                    </tr>
+                    <tr class="bg-green-50 border-b border-green-200 hover:bg-green-100">
+                        <td class="px-6 py-4 font-medium text-green-900">Pengembangan Sistem</td>
+                        <td class="px-6 py-4 font-medium">Pengembangan dan Implementasi Aplikasi Monitoring KPI Manajemen</td>
+                        <td class="px-6 py-4">Aplikasi berhasil dikembangkan sesuai rancangan dan diimplementasikan untuk 4 divisi</td>
+                        <td class="px-6 py-4">Laporan progres pengembangan, dokumentasi teknis, dan feedback dari user</td>
+                        <td class="px-6 py-4">Per Proyek</td>
+                        <td class="px-6 py-4 font-semibold text-center">10%</td>
+                        <td class="px-6 py-4"><span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Baru</span></td>
+                    </tr>
+                    <tr class="bg-green-50 border-b border-green-200 hover:bg-green-100">
+                        <td class="px-6 py-4 font-medium text-green-900">Lain-lain</td>
+                        <td class="px-6 py-4 font-medium">Akurasi dan Ketepatan Waktu Pengelolaan Kasbon Crew</td>
+                        <td class="px-6 py-4">100% pengajuan kasbon diproses dan tercatat tanpa kesalahan</td>
+                        <td class="px-6 py-4">Laporan bulanan dan audit silang oleh tim Finance</td>
+                        <td class="px-6 py-4">Bulanan</td>
+                        <td class="px-6 py-4 font-semibold text-center">5%</td>
+                        <td class="px-6 py-4"><span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Baru</span></td>
+                    </tr>
+                     <tr class="bg-green-50 border-b hover:bg-green-100">
+                        <td class="px-6 py-4 font-medium text-green-900">Lain-lain</td>
+                        <td class="px-6 py-4 font-medium">Pengelolaan dan Tindak Lanjut Masukan Karyawan</td>
+                        <td class="px-6 py-4">100% masukan direkapitulasi dan dilaporkan kepada manajemen setiap bulan</td>
+                        <td class="px-6 py-4">Dokumen ringkasan masukan</td>
+                        <td class="px-6 py-4">Bulanan</td>
+                        <td class="px-6 py-4 font-semibold text-center">5%</td>
+                        <td class="px-6 py-4"><span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">Baru</span></td>
+                    </tr>
+                </tbody>
+                 <tfoot>
+                    <tr class="font-semibold text-gray-900 bg-gray-100">
+                        <th scope="row" colspan="5" class="px-6 py-3 text-base text-right">Total Bobot</th>
+                        <td class="px-6 py-3 text-center text-base">100%</td>
+                        <td class="px-6 py-3"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

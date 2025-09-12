@@ -21,9 +21,7 @@ export default function Sidebar({ karyawan, isAdmin }) {
     return (
         <aside className={`bg-white shadow-md flex flex-col p-4 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
             
-            {/* --- AWAL PERBAIKAN HEADER SIDEBAR --- */}
             <div className="mb-4 flex items-center justify-between">
-                {/* Logo dan Teks (Hanya terlihat saat sidebar terbuka) */}
                 <div className={`flex items-center overflow-hidden transition-opacity duration-200 ${isSidebarOpen ? 'opacity-100' : 'opacity-0'}`}>
                     <img src="/logo.png" alt="Logo" className="h-10 w-10 mr-2 flex-shrink-0"/>
                     <div>
@@ -31,14 +29,12 @@ export default function Sidebar({ karyawan, isAdmin }) {
                     </div>
                 </div>
 
-                {/* Tombol Sembunyikan (Hanya terlihat saat sidebar terbuka) */}
                 {isSidebarOpen && (
                     <button onClick={() => setIsSidebarOpen(false)} className="p-2 rounded-full hover:bg-gray-200">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
                     </button>
                 )}
                 
-                {/* Tombol Tampilkan (Hanya terlihat saat sidebar tertutup) */}
                 {!isSidebarOpen && (
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 mx-auto">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -46,23 +42,22 @@ export default function Sidebar({ karyawan, isAdmin }) {
                 )}
             </div>
             
-            {/* Teks Welcome & Tombol Sign Out */}
             <div className={`mb-8 space-y-2 overflow-hidden transition-all duration-300 ${isSidebarOpen ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}>
                  <p className="text-xs text-gray-500 text-center">Welcome, {karyawan?.nama}</p>
                  <SignOutButton />
             </div>
-            {/* --- AKHIR PERBAIKAN HEADER SIDEBAR --- */}
 
             {/* Navigasi */}
             <nav className="flex-grow space-y-2">
                 <NavLink href="/dashboard" isSidebarOpen={isSidebarOpen} text="Dashboard" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600 group-hover:text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" /></svg>} />
-                <NavLink href="/dashboard/training" isSidebarOpen={isSidebarOpen} text="Program Training" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600 group-hover:text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 14l9-5-9-5-9 5 9 5z" /><path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-9.998 12.078 12.078 0 01.665-6.479L12 14z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-9.998 12.078 12.078 0 01.665-6.479L12 14z" /></svg>} />
+                <NavLink href="/dashboard/training" isSidebarOpen={isSidebarOpen} text="Training" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600 group-hover:text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 14l9-5-9-5-9 5 9 5z" /><path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-9.998 12.078 12.078 0 01.665-6.479L12 14z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-9.998 12.078 12.078 0 01.665-6.479L12 14z" /></svg>} />
+                
+                {/* --- PERUBAHAN DI SINI --- */}
                 {isAdmin && (
-                     <NavLink href="/dashboard/admin/training" isSidebarOpen={isSidebarOpen} text="Admin: Kelola Training" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600 group-hover:text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} />
+                     <NavLink href="/dashboard/admin" isSidebarOpen={isSidebarOpen} text="Admin Section" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600 group-hover:text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} />
                 )}
             </nav>
             
-            {/* Tombol Toggle di Bawah sudah dihapus */}
         </aside>
     );
 }

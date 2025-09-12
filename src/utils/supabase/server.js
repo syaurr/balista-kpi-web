@@ -1,8 +1,8 @@
+// utils/supabase/server.js
+
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-// Ini adalah satu-satunya fungsi yang akan kita gunakan di semua file sisi server.
-// Perhatikan bahwa ia tidak lagi menerima argumen 'cookies()'.
 export function createClient() {
   const cookieStore = cookies()
 
@@ -14,11 +14,22 @@ export function createClient() {
         get(name) {
           return cookieStore.get(name)?.value
         },
-        // CATATAN: Bagian 'set' dan 'remove' sengaja dikosongkan
-        // karena kita tidak akan memodifikasi cookies di Server Component.
-        // Ini adalah pola yang aman untuk mencegah error.
-        set(name, value, options) {},
-        remove(name, options) {},
+        set(name, value, options) {
+          try {
+            cookieStore.set({ name, value, ...options })
+          } catch (error) {
+            // The `set` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing user sessions.
+          }
+        },
+        remove(name, options) {
+          try {
+            cookieStore.set({ name, value: '', ...options })
+          } catch (error) {
+            // The `delete` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing user sessions.
+          }
+        },
       },
     }
   )
