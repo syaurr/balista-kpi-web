@@ -74,52 +74,43 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
         if (!kpis || kpis.length === 0) {
             return { totalNilaiAkhir: 0, nilaiProporsional: 0, areaScores: [] };
         }
-        
-        console.log("--- MEMULAI KALKULASI UNTUK:", periode, "---");
 
-        let totalNilaiBulanan = 0;
-        let totalBobotBulanan = 0;
-        const kpisForProportionalCalc = []; // Array untuk melacak KPI
+        let totalNilai = 0;
+        let totalBobotYangDinilai = 0;
         const areaData = {};
 
         kpis.forEach(kpi => {
-            const score = scores[kpi.id] || 0;
+            const score = currentScores[kpi.id] || 0;
             const nilai = score * (kpi.bobot / 100.0);
-            
-            const isMonthlyKPI = kpi.frekuensi && ['bulanan', 'mingguan', 'harian', 'per kebutuhan', 'per kasus'].some(f => kpi.frekuensi.toLowerCase().includes(f));
 
-            if (isMonthlyKPI) {
-                totalNilaiBulanan += nilai;
-                // Hanya tambahkan bobot jika KPI ini benar-benar memiliki skor (sudah dinilai)
-                if (scores[kpi.id] !== undefined && scores[kpi.id] !== null && scores[kpi.id] > 0) {
-                    totalBobotBulanan += kpi.bobot;
-                    kpisForProportionalCalc.push(`${kpi.kpi_deskripsi} (Bobot: ${kpi.bobot}%)`);
-                }
+            // 1. Total Nilai Akhir dihitung dari SEMUA KPI yang ada (termasuk yang skornya 0)
+            totalNilai += nilai;
+            
+            // 2. Total Bobot untuk Proporsional HANYA dihitung dari KPI yang skornya > 0
+            if (score > 0) {
+                totalBobotYangDinilai += kpi.bobot;
             }
             
-            const areaName = kpi.area_kerja || 'Lain-lain';
-            if (!areaData[areaName]) { areaData[areaName] = { totalScore: 0, count: 0 }; }
+            // 3. Logika untuk chart juga HANYA dari KPI yang skornya > 0
             if (score > 0) {
+                const areaName = kpi.area_kerja || 'Lain-lain';
+                if (!areaData[areaName]) {
+                    areaData[areaName] = { totalScore: 0, count: 0 };
+                }
                 areaData[areaName].totalScore += score;
                 areaData[areaName].count += 1;
             }
         });
         
-        console.log("DEBUG: KPI yang dihitung untuk Nilai Proporsional:", kpisForProportionalCalc);
-        console.log("DEBUG: Total Bobot yang dihitung:", totalBobotBulanan);
-
-        const proporsional = totalBobotBulanan > 0 ? (totalNilaiBulanan / (totalBobotBulanan / 100.0)) : 0;
+        const proporsional = totalBobotYangDinilai > 0 ? (totalNilai / (totalBobotYangDinilai / 100.0)) : 0;
+        
         const finalAreaScores = Object.entries(areaData).map(([area, data]) => ({
             area,
             average_score: data.count > 0 ? data.totalScore / data.count : 0
         }));
 
-        console.log("DEBUG: Data yang dikirim ke Chart:", finalAreaScores);
-        console.log("-----------------------------------------");
-
-        return { totalNilaiAkhir: totalNilaiBulanan, nilaiProporsional: proporsional, areaScores: finalAreaScores };
-    }, [scores, kpis, periode]); // Tambahkan periode sebagai dependency
-    // --- AKHIR PERBAIKAN UTAMA ---
+        return { totalNilaiAkhir: totalNilai, nilaiProporsional: proporsional, areaScores: finalAreaScores };
+    }, [currentScores, kpis]);
 
     const sortedKpis = useMemo(() => {
         if (!kpis) return [];

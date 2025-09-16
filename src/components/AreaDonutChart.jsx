@@ -1,37 +1,60 @@
-// app/components/AreaDonutChart.jsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import KpiDetailDialog from './KpiDetailDialog'; 
+import KpiDetailDialog from './KpiDetailDialog';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-export default function AreaDonutChart({ areaScores, userRole }) { 
-    const [isClient, setIsClient] = useState(false);
-    useEffect(() => { setIsClient(true) }, []);
-
+export default function AreaDonutChart({ areaScores, userRole }) {
     const [showModal, setShowModal] = useState(false);
     const [selectedArea, setSelectedArea] = useState(null);
 
-    if (!areaScores || areaScores.length === 0) {
-        return <p className="text-center text-gray-500 pt-16">Tidak ada data chart untuk ditampilkan.</p>;
+    // --- AWAL PERBAIKAN TOTAL ---
+
+    // PERBAIKAN 3: Filter data terlebih dahulu untuk membuang area yang rata-ratanya 0
+    const filteredScores = useMemo(() => {
+        return areaScores.filter(score => score.average_score > 0);
+    }, [areaScores]);
+    
+    // Guard clause jika tidak ada data setelah difilter
+    if (!filteredScores || filteredScores.length === 0) {
+        return <p className="text-center text-gray-500 pt-16">Tidak ada data penilaian di atas 0 untuk ditampilkan pada periode ini.</p>;
     }
 
-    const chartLabels = areaScores.map(item => item.area);
-    const chartDataValues = areaScores.map(item => item.average_score);
-    const backgroundColors = ['#022c2c', '#033f3f', '#4f7979', '#808b8b', '#d6302a', '#b0a1a1'];
+    // PERBAIKAN 2: Logika Pewarnaan Merah untuk Nilai Terendah
+    // Urutkan data berdasarkan skor rata-rata untuk menemukan yang terendah
+    const sortedScores = [...filteredScores].sort((a, b) => a.average_score - b.average_score);
+    const lowestScoreItem = sortedScores[0];
+    
+    const redColor = '#d6302a';
+    const tealPalette = ['#022c2c', '#033f3f', '#4f7979', '#808b8b', '#a48d5e'];
+
+    // Terapkan warna secara dinamis
+    const backgroundColors = filteredScores.map(item => {
+        if (item.area === lowestScoreItem.area) {
+            return redColor; // Warna merah untuk skor terendah
+        }
+        const sortedIndex = sortedScores.findIndex(s => s.area === item.area);
+        return tealPalette[(sortedIndex - 1 + tealPalette.length) % tealPalette.length];
+    });
 
     const data = {
-        labels: chartLabels,
-        datasets: [{ label: 'Skor Rata-rata', data: chartDataValues, backgroundColor: backgroundColors, borderColor: '#ffffff', borderWidth: 2 }],
+        labels: filteredScores.map(item => item.area),
+        datasets: [{
+            label: 'Skor Rata-rata',
+            data: filteredScores.map(item => item.average_score),
+            backgroundColor: backgroundColors,
+            borderColor: '#ffffff',
+            borderWidth: 3,
+        }],
     };
 
     const handleChartClick = (event, elements) => {
         if (elements.length > 0) {
             const elementIndex = elements[0].index;
-            const areaName = chartLabels[elementIndex];
+            const areaName = data.labels[elementIndex];
             setSelectedArea(areaName);
             setShowModal(true);
         }
@@ -41,14 +64,44 @@ export default function AreaDonutChart({ areaScores, userRole }) {
         responsive: true,
         maintainAspectRatio: false,
         onClick: handleChartClick,
-        plugins: { legend: { position: 'bottom' } },
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: { font: { family: 'Poppins', size: 12 } }
+            },
+            // PERBAIKAN 1: Tooltip dengan Skor & Persentase
+            tooltip: {
+                bodyFont: { family: 'Poppins' },
+                titleFont: { family: 'Poppins', weight: 'bold', size: 14 },
+                callbacks: {
+                    label: function(context) {
+                        const label = context.label || '';
+                        const value = context.raw || 0;
+                        const total = context.chart.data.datasets[0].data.reduce((acc, val) => acc + val, 0);
+                        const percentage = total > 0 ? (value / total) * 100 : 0;
+                        return `${label}: ${value.toFixed(2)} (${percentage.toFixed(1)}%)`;
+                    }
+                }
+            }
+        },
         cutout: '50%',
     };
 
     return (
         <>
-            {isClient && <Doughnut data={data} options={options} />}
-            {showModal && <KpiDetailDialog areaName={selectedArea} onClose={() => setShowModal(false)} />}
+            <Doughnut data={data} options={options} />
+            {showModal && (
+                <KpiDetailDialog 
+                    areaName={selectedArea}
+                    userRole={userRole}
+                    onClose={(didUpdate) => {
+                        setShowModal(false);
+                        if (didUpdate) {
+                            window.location.reload();
+                        }
+                    }}
+                />
+            )}
         </>
     );
 }
