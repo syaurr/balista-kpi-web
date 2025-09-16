@@ -460,3 +460,34 @@ export async function deleteRecommendation(formData) {
     revalidatePath('/dashboard/admin/assessment');
     return { success: 'Rekomendasi berhasil dihapus.' };
 }
+
+export async function getDashboardDataForPeriod(periode) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'User not authenticated' };
+
+  const { data: karyawan, error: userError } = await supabase
+    .from('karyawan').select('id, nama, posisi, role').eq('email', user.email).single();
+  if (userError) return { error: 'Failed to fetch user profile.' };
+
+  const karyawanId = karyawan.id;
+  const posisi = karyawan.posisi;
+
+  // Mengambil data berdasarkan periode yang dipilih
+  const [rekapResult, areaScoresResult, recommendationsResult, summaryResult] = await Promise.all([
+    supabase.rpc('get_rekap_kpi_data', { p_karyawan_id: karyawanId, p_posisi: posisi, p_periode: periode }),
+    supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
+    supabase.from('kpi_summary_recommendations').select('rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
+    supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single()
+  ]);
+
+  return {
+    user: karyawan,
+    data: {
+      rekap: rekapResult.data || [],
+      areaScores: areaScoresResult.data || [],
+      recommendations: recommendationsResult.data || [],
+      summary: summaryResult.data || { catatan_kpi: `Belum ada catatan umum untuk periode ${periode}.` },
+    },
+  };
+}

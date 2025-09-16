@@ -1,28 +1,60 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import ScoreCard from './ScoreCard';
 import AreaDonutChart from './AreaDonutChart';
 
-export default function DashboardClient({ user, initialData }) {
+export default function DashboardClient({ user, initialData, initialMonth, initialYear }) {
+    const router = useRouter();
     const { rekap, areaScores, recommendations, summary } = initialData;
 
-    // Kalkulasi skor
+    // State untuk mengontrol dropdown
+    const [month, setMonth] = useState(initialMonth);
+    const [year, setYear] = useState(initialYear);
+
+    const handlePeriodChange = () => {
+        // Buat URL baru dengan parameter periode dan refresh halaman
+        router.push(`/dashboard?bulan=${month}&tahun=${year}`);
+    };
+
+    // Kalkulasi skor (logika ini sudah benar)
     const { totalNilaiAkhir, nilaiProporsional } = useMemo(() => {
-        let total = rekap.reduce((sum, item) => sum + parseFloat(item.nilai_akhir || 0), 0);
-        let totalBobot = rekap.reduce((sum, item) => {
-            if (item.frekuensi && ['bulanan', 'mingguan', 'harian', 'per kebutuhan', 'per kasus'].some(f => item.frekuensi.toLowerCase().includes(f))) {
-                return sum + item.bobot;
+        let total = 0;
+        let totalBobot = 0;
+        rekap.forEach(item => {
+            total += parseFloat(item.nilai_akhir || 0);
+            if (item.skor_aktual > 0) {
+                totalBobot += item.bobot;
             }
-            return sum;
-        }, 0);
+        });
         const proporsional = totalBobot > 0 ? (total / (totalBobot / 100.0)) : 0;
         return { totalNilaiAkhir: total, nilaiProporsional: proporsional };
     }, [rekap]);
+    
+    const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
+    const months = Array.from({ length: 12 }, (_, i) => ({
+        value: (i + 1).toString(),
+        label: new Date(0, i).toLocaleString('id-ID', { month: 'long' })
+    }));
 
     return (
         <div>
-            <h1 className="text-3xl font-bold text-[#022020] mb-6">Dashboard Kinerja</h1>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold text-[#022020]">Dashboard Kinerja</h1>
+                {/* --- AWAL FITUR PERIODE --- */}
+                <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-md">
+                    <select value={month} onChange={e => setMonth(e.target.value)} className="select select-bordered select-sm">
+                        {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                    <select value={year} onChange={e => setYear(e.target.value)} className="select select-bordered select-sm">
+                        {years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <button onClick={handlePeriodChange} className="btn btn-sm btn-primary">Lihat</button>
+                </div>
+                {/* --- AKHIR FITUR PERIODE --- */}
+            </div>
+
             <section className="mb-8">
                 <h2 className="text-2xl font-bold text-[#6b1815] mb-4">Ringkasan Kinerja Bulanan</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
