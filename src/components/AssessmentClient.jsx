@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { saveFullAssessment, addRecommendation, fetchAssessmentData } from '../app/actions';
+import { saveFullAssessment, addRecommendation, fetchAssessmentData, updateRecommendation, deleteRecommendation } from '../app/actions';
 import ScoreCard from './ScoreCard';
 import Modal from './Modal';
 import AreaDonutChart from './AreaDonutChart';
@@ -55,6 +55,7 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const [currentScores, setCurrentScores] = useState(scores);
     const [currentGeneralNote, setCurrentGeneralNote] = useState(generalNote);
     const [currentRecommendations, setCurrentRecommendations] = useState(recommendations); // State baru untuk rekomendasi
+    const [editingRecommendation, setEditingRecommendation] = useState(null);
     const [newRecommendation, setNewRecommendation] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
@@ -170,9 +171,22 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
         if (newRecommendation.trim() && selectedEmployeeId && periode) {
             await addRecommendation(selectedEmployeeId, periode, newRecommendation);
             setNewRecommendation('');
-            // Refresh data rekomendasi dengan memanggil ulang fetch
-            const { recommendations: newRecs } = await fetchAssessmentData(selectedEmployeeId, periode);
-            setCurrentRecommendations(newRecs.recommendations || []);
+            fetchAllData(); // Muat ulang semua data
+        }
+    };
+
+    // --- FUNGSI BARU UNTUK MENGHAPUS REKOMENDASI ---
+    const handleDeleteRecommendation = async (rec) => {
+        if (window.confirm(`Yakin ingin menghapus rekomendasi: "${rec.rekomendasi_text}"?`)) {
+            const formData = new FormData();
+            formData.append('id', rec.id);
+            const result = await deleteRecommendation(formData);
+            if (result.error) {
+                alert(`Gagal menghapus: ${result.error}`);
+            } else {
+                alert('Rekomendasi berhasil dihapus.');
+                fetchAllData();
+            }
         }
     };
 
@@ -266,11 +280,29 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                                 <h3 className="font-bold text-lg mb-2">Rekomendasi</h3>
                                 <div className="max-h-40 overflow-y-auto mb-4">
                                     <table className="table table-xs">
-                                        <tbody>
-                                            {currentRecommendations.map((r, i) => <tr key={r.id || i}><td>{r.rekomendasi_text}</td></tr>)}
-                                            {currentRecommendations.length === 0 && <tr><td>Belum ada rekomendasi.</td></tr>}
-                                        </tbody>
-                                    </table>
+                                    <thead>
+                                        <tr>
+                                            <th>No.</th>
+                                            <th>Deskripsi Rekomendasi</th>
+                                            <th className="text-right">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {currentRecommendations.map((rec, index) => (
+                                            <tr key={rec.id || index}>
+                                                <th className="text-center">{index + 1}</th>
+                                                <td>{rec.rekomendasi_text}</td>
+                                                <td className="text-right space-x-2">
+                                                    <button onClick={() => setEditingRecommendation(rec)} className="btn btn-xs btn-outline">Edit</button>
+                                                    <button onClick={() => handleDeleteRecommendation(rec)} className="btn btn-xs btn-ghost text-red-600">Hapus</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {currentRecommendations.length === 0 && (
+                                            <tr><td colSpan="3" className="text-center italic">Belum ada rekomendasi.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
                                 </div>
                                 <div className="flex space-x-2">
                                     <input type="text" value={newRecommendation} onChange={e => setNewRecommendation(e.target.value)} className="input input-bordered w-full" placeholder="Tambah rekomendasi baru..."/>
@@ -314,6 +346,30 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
             )}
             
             {linkModalKpi && <LinkModal kpi={linkModalKpi} onClose={() => setLinkModalKpi(null)} />}
+            {editingRecommendation && (
+                <Modal 
+                    isOpen={true}
+                    onClose={() => setEditingRecommendation(null)}
+                    title="Edit Rekomendasi"
+                >
+                    <form action={async (formData) => {
+                        await updateRecommendation(formData);
+                        setEditingRecommendation(null);
+                        fetchAllData();
+                    }}>
+                        <input type="hidden" name="id" value={editingRecommendation.id} />
+                        <textarea 
+                            name="rekomendasi_text"
+                            defaultValue={editingRecommendation.rekomendasi_text}
+                            rows="4"
+                            className="textarea textarea-bordered w-full"
+                        ></textarea>
+                        <div className="mt-4 flex justify-end">
+                            <button type="submit" className="btn btn-primary">Simpan Perubahan</button>
+                        </div>
+                    </form>
+                </Modal>
+            )}
         </div>
     );
 }

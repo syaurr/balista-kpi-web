@@ -421,3 +421,42 @@ export async function addRecommendation(karyawanId, periode, text) {
     if (error) return { error: 'Gagal menambah rekomendasi.' };
     revalidatePath('/dashboard/admin/assessment');
 }
+
+export async function updateRecommendation(formData) {
+    const supabase = createClient();
+    const id = formData.get('id');
+    const newText = formData.get('rekomendasi_text');
+
+    if (!id || !newText) return { error: 'Data tidak lengkap.' };
+
+    const { error } = await supabase
+        .from('kpi_summary_recommendations')
+        .update({ rekomendasi_text: newText })
+        .eq('id', id);
+
+    if (error) {
+        console.error('Update recommendation error:', error);
+        return { error: 'Gagal memperbarui rekomendasi.' };
+    }
+    revalidatePath('/dashboard/admin/assessment');
+    return { success: 'Rekomendasi berhasil diperbarui.' };
+}
+
+export async function deleteRecommendation(formData) {
+    const supabase = createClient();
+    const id = formData.get('id');
+
+    if (!id) return { error: 'ID tidak ditemukan.' };
+
+    const { error } = await supabase
+        .from('kpi_summary_recommendations')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Delete recommendation error:', error);
+        return { error: 'Gagal menghapus rekomendasi.' };
+    }
+    revalidatePath('/dashboard/admin/assessment');
+    return { success: 'Rekomendasi berhasil dihapus.' };
+}
