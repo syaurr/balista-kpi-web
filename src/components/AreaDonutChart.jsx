@@ -1,3 +1,4 @@
+// app/components/AreaDonutChart.jsx
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -7,34 +8,28 @@ import KpiDetailDialog from './KpiDetailDialog';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
+// Hanya perlu menerima userRole untuk hak akses simpan catatan
 export default function AreaDonutChart({ areaScores, userRole }) {
     const [showModal, setShowModal] = useState(false);
     const [selectedArea, setSelectedArea] = useState(null);
 
-    // --- AWAL PERBAIKAN TOTAL ---
-
-    // PERBAIKAN 3: Filter data terlebih dahulu untuk membuang area yang rata-ratanya 0
     const filteredScores = useMemo(() => {
         return areaScores.filter(score => score.average_score > 0);
     }, [areaScores]);
     
-    // Guard clause jika tidak ada data setelah difilter
     if (!filteredScores || filteredScores.length === 0) {
-        return <p className="text-center text-gray-500 pt-16">Tidak ada data penilaian di atas 0 untuk ditampilkan pada periode ini.</p>;
+        return <p className="text-center text-gray-500 pt-16">Tidak ada data penilaian untuk ditampilkan pada periode ini.</p>;
     }
 
-    // PERBAIKAN 2: Logika Pewarnaan Merah untuk Nilai Terendah
-    // Urutkan data berdasarkan skor rata-rata untuk menemukan yang terendah
     const sortedScores = [...filteredScores].sort((a, b) => a.average_score - b.average_score);
     const lowestScoreItem = sortedScores[0];
     
     const redColor = '#d6302a';
     const tealPalette = ['#022c2c', '#033f3f', '#4f7979', '#808b8b', '#a48d5e'];
 
-    // Terapkan warna secara dinamis
     const backgroundColors = filteredScores.map(item => {
         if (item.area === lowestScoreItem.area) {
-            return redColor; // Warna merah untuk skor terendah
+            return redColor;
         }
         const sortedIndex = sortedScores.findIndex(s => s.area === item.area);
         return tealPalette[(sortedIndex - 1 + tealPalette.length) % tealPalette.length];
@@ -65,14 +60,8 @@ export default function AreaDonutChart({ areaScores, userRole }) {
         maintainAspectRatio: false,
         onClick: handleChartClick,
         plugins: {
-            legend: {
-                position: 'bottom',
-                labels: { font: { family: 'Poppins', size: 12 } }
-            },
-            // PERBAIKAN 1: Tooltip dengan Skor & Persentase
+            legend: { position: 'bottom' },
             tooltip: {
-                bodyFont: { family: 'Poppins' },
-                titleFont: { family: 'Poppins', weight: 'bold', size: 14 },
                 callbacks: {
                     label: function(context) {
                         const label = context.label || '';
@@ -93,13 +82,8 @@ export default function AreaDonutChart({ areaScores, userRole }) {
             {showModal && (
                 <KpiDetailDialog 
                     areaName={selectedArea}
-                    userRole={userRole}
-                    onClose={(didUpdate) => {
-                        setShowModal(false);
-                        if (didUpdate) {
-                            window.location.reload();
-                        }
-                    }}
+                    userRole={userRole} // Kirim userRole untuk hak akses edit
+                    onClose={() => setShowModal(false)}
                 />
             )}
         </>

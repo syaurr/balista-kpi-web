@@ -1,33 +1,68 @@
+// src/components/DashboardClient.jsx
+
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useMemo, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ScoreCard from './ScoreCard';
 import AreaDonutChart from './AreaDonutChart';
 
-export default function DashboardClient({ user, initialData, initialMonth, initialYear }) {
+export default function DashboardClient({ user, initialData, initialMonth, initialYear, karyawanId, periode }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { rekap, areaScores, recommendations, summary } = initialData;
 
-    // State untuk mengontrol dropdown
     const [month, setMonth] = useState(initialMonth);
     const [year, setYear] = useState(initialYear);
+    
+    useEffect(() => {
+        const params = new URLSearchParams(searchParams);
+        if (!params.get('karyawanId') && karyawanId) {
+            router.replace(`/dashboard?bulan=${month}&tahun=${year}&karyawanId=${karyawanId}`);
+        }
+    }, [karyawanId, month, year, searchParams, router]);
 
     const handlePeriodChange = () => {
-        // Buat URL baru dengan parameter periode dan refresh halaman
-        router.push(`/dashboard?bulan=${month}&tahun=${year}`);
+        router.push(`/dashboard?bulan=${month}&tahun=${year}&karyawanId=${karyawanId}`);
     };
 
-    // Kalkulasi skor (logika ini sudah benar)
+    // --- BLOK DEBUGGING FORENSIK ---
     const { totalNilaiAkhir, nilaiProporsional } = useMemo(() => {
+        console.log("===================================");
+        console.log("MEMULAI KALKULASI FORENSIK useMemo");
+        console.log("===================================");
+        
         let total = 0;
         let totalBobot = 0;
-        rekap.forEach(item => {
-            total += parseFloat(item.nilai_akhir || 0);
-            if (item.skor_aktual > 0) {
-                totalBobot += item.bobot;
+
+        if (!rekap || rekap.length === 0) {
+            console.log("HASIL: 'rekap' kosong atau tidak ada. Mengembalikan 0.");
+            return { totalNilaiAkhir: 0, nilaiProporsional: 0 };
+        }
+
+        rekap.forEach((item, index) => {
+            const nilai = item.nilai_akhir;
+            const bobot = item.bobot;
+            const skor = item.skor_aktual;
+
+            const convertedNilai = Number(nilai) || 0;
+            const convertedBobot = Number(bobot) || 0;
+            const convertedSkor = Number(skor) || 0;
+
+            console.log(`[Item #${index}] NILAIAKHIR: Diterima '${nilai}' (Tipe: ${typeof nilai}), Dikonversi menjadi -> ${convertedNilai}`);
+            
+            total += convertedNilai;
+
+            if (convertedSkor > 0) {
+                console.log(`[Item #${index}] BOBOT: Diterima '${bobot}' (Tipe: ${typeof bobot}), Dikonversi menjadi -> ${convertedBobot}`);
+                totalBobot += convertedBobot;
             }
         });
+
+        console.log("-----------------------------------");
+        console.log(`HASIL AKHIR: Total Nilai = ${total}, Total Bobot = ${totalBobot}`);
+        console.log("===================================");
+
         const proporsional = totalBobot > 0 ? (total / (totalBobot / 100.0)) : 0;
         return { totalNilaiAkhir: total, nilaiProporsional: proporsional };
     }, [rekap]);
@@ -42,7 +77,6 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-[#022020]">Dashboard Kinerja</h1>
-                {/* --- AWAL FITUR PERIODE --- */}
                 <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-md">
                     <select value={month} onChange={e => setMonth(e.target.value)} className="select select-bordered select-sm">
                         {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
@@ -52,14 +86,24 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
                     </select>
                     <button onClick={handlePeriodChange} className="btn btn-sm btn-primary">Lihat</button>
                 </div>
-                {/* --- AKHIR FITUR PERIODE --- */}
             </div>
 
             <section className="mb-8">
                 <h2 className="text-2xl font-bold text-[#6b1815] mb-4">Ringkasan Kinerja Bulanan</h2>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <ScoreCard title="Total Nilai Akhir Bulanan" value={totalNilaiAkhir} />
-                    <ScoreCard title="Nilai Akhir Proporsional" value={nilaiProporsional} />
+                    <ScoreCard title="Nilai Akhir Proporsional" value={nilaiProporsional} prominent={true} />
+                </div>
+            </section>
+
+            <section className="bg-white p-6 rounded-xl shadow-md mb-8">
+                <h3 className="text-lg font-bold text-[#6b1815] mb-4">Kinerja per Area</h3>
+                <div className="h-96 w-full">
+                    <AreaDonutChart 
+                        areaScores={areaScores} 
+                        userRole={user.role}
+                    />
                 </div>
             </section>
 
@@ -97,22 +141,16 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
                                     <td className="px-4 py-4 text-center">{index + 1}</td>
                                     <td className="px-4 py-4">{item.kpi_deskripsi}</td>
                                     <td className="px-4 py-4">{item.frekuensi}</td>
-                                    <td className="px-4 py-4 text-center text-sm">{item.skor_aktual}</td>
+                                    <td className="px-4 py-4 text-center">{item.skor_aktual}</td>
                                     <td className="px-4 py-4 text-center">{item.bobot}%</td>
-                                    <td className="px-4 py-4 text-[#6b1815] text-center font-semibold text-lg">{parseFloat(item.nilai_akhir || 0).toFixed(2)}</td>
+                                    <td className="px-4 py-4 text-center font-semibold">{parseFloat(item.nilai_akhir || 0).toFixed(2)}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
             </section>
-
-            <section className="bg-white p-6 rounded-xl shadow-md">
-                <h3 className="text-lg font-bold text-[#6b1815] mb-4">Kinerja per Area</h3>
-                <div className="h-96 w-full">
-                    <AreaDonutChart areaScores={areaScores} userRole={user.role} />
-                </div>
-            </section>
+            
         </div>
     );
 }

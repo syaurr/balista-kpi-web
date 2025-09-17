@@ -149,73 +149,71 @@ export async function importFromExcel(formData) {
 
 export async function fetchKpiDetailsForArea(karyawanId, periode, areaName) {
     const supabase = createClient();
-    if (!karyawanId || !periode || !areaName) return [];
-
+    if (!karyawanId || !periode || !areaName) {
+        return { data: [], error: 'Parameter tidak lengkap.' };
+    }
     try {
-        const { data: scoresData } = await supabase
+        const { data, error } = await supabase
             .from('penilaian_kpi')
-            .select('kpi_master_id, nilai')
+            .select(`
+                skor_aktual:nilai, 
+                kpi_master!inner(kpi_deskripsi, area)
+            `)
             .eq('karyawan_id', karyawanId)
-            .eq('periode', periode);
+            .eq('periode', periode)
+            .eq('kpi_master.area', areaName);
 
-        if (!scoresData || scoresData.length === 0) return [];
+        if (error) throw error;
 
-        const { data: allKpis } = await supabase
-            .from('kpi_master')
-            .select('id, kpi_deskripsi, target_standar, area'); // <-- Ambil kolom 'area'
-            
-        if (!allKpis) return [];
-        
-        const kpisMap = new Map(allKpis.map(kpi => [kpi.id, kpi]));
-
-        const finalDetails = scoresData
-            .map(score => {
-                const kpiMaster = kpisMap.get(score.kpi_master_id);
-                
-                // --- PERBAIKAN FINAL DI SINI: COCOKKAN DENGAN KOLOM 'area' ---
-                if (kpiMaster && kpiMaster.area === areaName) {
-                    return {
-                        nilai: score.nilai,
-                        kpi_master: {
-                            kpi_deskripsi: kpiMaster.kpi_deskripsi,
-                            target_standar: kpiMaster.target_standar
-                        }
-                    };
-                }
-                return null;
-            })
-            .filter(Boolean);
-    
-        return finalDetails;
-
+        const finalData = data.map(item => ({
+            kpi_deskripsi: item.kpi_master.kpi_deskripsi,
+            skor_aktual: item.skor_aktual
+        }));
+        return { data: finalData, error: null };
     } catch (error) {
-        console.error("Error di fetchKpiDetailsForArea:", error);
-        return [];
+        console.error("Error di fetchKpiDetailsForArea:", error.message);
+        return { data: [], error: 'Gagal mengambil detail KPI.' };
     }
 }
 
-
-
 export async function fetchAreaNote(karyawanId, periode, areaName) {
-    const supabase = createClient(); // PERBAIKAN: Gunakan createClient() saja
-    if (!karyawanId || !periode || !areaName) return '';
-    const { data } = await supabase.from('area_summary_notes')
-        .select('catatan')
-        .eq('karyawan_id', karyawanId)
-        .eq('periode', periode)
-        .eq('area_name', areaName)
-        .single();
-    return data?.catatan || '';
+    const supabase = createClient();
+    if (!karyawanId || !periode || !areaName) {
+        return { note: '', error: 'Parameter tidak lengkap.' };
+    }
+    try {
+        const { data, error } = await supabase.from('area_summary_notes')
+            .select('catatan')
+            .eq('karyawan_id', karyawanId)
+            .eq('periode', periode)
+            .eq('area_name', areaName)
+            .single();
+        if (error && error.code !== 'PGRST116') throw error;
+        return { note: data?.catatan || '', error: null };
+    } catch (error) {
+        console.error("Error di fetchAreaNote:", error.message);
+        return { note: '', error: 'Gagal mengambil catatan area.' };
+    }
 }
 
 export async function saveAreaNote(karyawanId, periode, areaName, noteText) {
-    const supabase = createClient(); // PERBAIKAN: Gunakan createClient() saja
-    if (!karyawanId || !periode || !areaName) return { error: 'Data tidak lengkap.' };
-    const { error } = await supabase.from('area_summary_notes')
-        .upsert({ karyawan_id: karyawanId, periode, area_name: areaName, catatan: noteText }, { onConflict: 'karyawan_id, periode, area_name' });
-    if (error) return { error: 'Gagal menyimpan catatan.' };
-    revalidatePath('/dashboard/admin/assessment');
-    return { success: 'Catatan berhasil disimpan!' };
+    const supabase = createClient();
+    if (!karyawanId || !periode || !areaName) {
+        return { success: null, error: 'Data tidak lengkap.' };
+    }
+    try {
+        const { error } = await supabase.from('area_summary_notes')
+            .upsert(
+                { karyawan_id: karyawanId, periode, area_name: areaName, catatan: noteText },
+                { onConflict: 'karyawan_id, periode, area_name' }
+            );
+        if (error) throw error;
+        revalidatePath('/dashboard/admin/assessment');
+        return { success: 'Catatan berhasil disimpan!', error: null };
+    } catch (error) {
+        console.error("Error di saveAreaNote:", error.message);
+        return { success: null, error: 'Gagal menyimpan catatan.' };
+    }
 }
 
 export async function addOrUpdateKpi(formData) {
@@ -461,19 +459,18 @@ export async function deleteRecommendation(formData) {
     return { success: 'Rekomendasi berhasil dihapus.' };
 }
 
-export async function getDashboardDataForPeriod(periode) {
-  const supabase = createClient();
+export async function getDashboardPageData(periode) {
+  const supabase = createClient(cookies()); // Selalu gunakan cookies() di server component/action
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'User not authenticated' };
+  if (!user) return { user: null, data: null, error: 'User not authenticated' };
 
   const { data: karyawan, error: userError } = await supabase
     .from('karyawan').select('id, nama, posisi, role').eq('email', user.email).single();
-  if (userError) return { error: 'Failed to fetch user profile.' };
+  if (userError) return { user, data: null, error: 'Failed to fetch user profile.' };
 
   const karyawanId = karyawan.id;
   const posisi = karyawan.posisi;
 
-  // Mengambil data berdasarkan periode yang dipilih
   const [rekapResult, areaScoresResult, recommendationsResult, summaryResult] = await Promise.all([
     supabase.rpc('get_rekap_kpi_data', { p_karyawan_id: karyawanId, p_posisi: posisi, p_periode: periode }),
     supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
@@ -489,5 +486,6 @@ export async function getDashboardDataForPeriod(periode) {
       recommendations: recommendationsResult.data || [],
       summary: summaryResult.data || { catatan_kpi: `Belum ada catatan umum untuk periode ${periode}.` },
     },
+    error: null,
   };
 }

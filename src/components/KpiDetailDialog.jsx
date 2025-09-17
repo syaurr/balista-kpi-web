@@ -6,8 +6,10 @@ import { useSearchParams } from 'next/navigation';
 import { fetchKpiDetailsForArea, fetchAreaNote, saveAreaNote } from '../app/actions';
 import Modal from './Modal';
 
-export default function KpiDetailDialog({ areaName, onClose }) {
+// Menerima userRole dari AreaDonutChart
+export default function KpiDetailDialog({ areaName, onClose, userRole }) {
     const searchParams = useSearchParams();
+    // Ambil parameter dari URL, SAMA SEPERTI REFERENSI ANDA
     const karyawanId = searchParams.get('karyawanId');
     const bulan = searchParams.get('bulan');
     const tahun = searchParams.get('tahun');
@@ -17,21 +19,31 @@ export default function KpiDetailDialog({ areaName, onClose }) {
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState('');
 
+    const isAdmin = userRole?.toLowerCase() === 'admin';
+
     useEffect(() => {
+        // Logika ini sekarang akan berfungsi di halaman admin
         if (karyawanId && bulan && tahun && areaName) {
             const periode = `${new Date(0, bulan - 1).toLocaleString('id-ID', { month: 'long' })} ${tahun}`;
             
             const loadData = async () => {
                 setLoading(true);
-                const [detailsData, noteData] = await Promise.all([
+                const [detailsResult, noteResult] = await Promise.all([
                     fetchKpiDetailsForArea(karyawanId, periode, areaName),
                     fetchAreaNote(karyawanId, periode, areaName)
                 ]);
-                setKpiDetails(detailsData);
-                setNote(noteData);
+
+                // Menggunakan struktur balikan server action yang baru & aman
+                if (!detailsResult.error) setKpiDetails(detailsResult.data || []);
+                if (!noteResult.error) setNote(noteResult.note || '');
+                
                 setLoading(false);
             };
             loadData();
+        } else {
+            // Menangani kasus jika parameter URL tidak ada
+            setLoading(false);
+            console.warn("Parameter URL (karyawanId, bulan, tahun) tidak lengkap.");
         }
     }, [karyawanId, bulan, tahun, areaName]);
 
@@ -40,16 +52,14 @@ export default function KpiDetailDialog({ areaName, onClose }) {
         const result = await saveAreaNote(karyawanId, periode, areaName, note);
         if (result.success) {
             setMessage(result.success);
-            setTimeout(() => setMessage(''), 2000); // Hilangkan pesan setelah 2 detik
+            setTimeout(() => setMessage(''), 3000);
         }
     };
 
     return (
         <Modal isOpen={true} onClose={onClose} title={`Detail Kinerja Area: ${areaName}`}>
             {loading ? (
-                <div className="text-center p-8">
-                    <span className="loading loading-spinner loading-lg"></span>
-                </div>
+                <div className="text-center p-8"><span className="loading loading-spinner loading-lg"></span></div>
             ) : (
                 <div className="space-y-6">
                     <div>
@@ -57,8 +67,8 @@ export default function KpiDetailDialog({ areaName, onClose }) {
                         <div className="max-h-60 overflow-y-auto bg-gray-50 p-3 rounded-md space-y-3">
                             {kpiDetails.length > 0 ? kpiDetails.map((item, index) => (
                                 <div key={index} className="border-b pb-2 last:border-b-0">
-                                    <p className="font-semibold text-gray-700">{item.kpi_master.kpi_deskripsi}</p>
-                                    <p className="text-sm text-gray-500">Skor Diberikan: <span className="font-bold text-blue-600">{item.nilai}</span></p>
+                                    <p className="font-semibold text-gray-700">{item.kpi_deskripsi}</p>
+                                    <p className="text-sm text-gray-500">Skor Diberikan: <span className="font-bold text-blue-600">{item.skor_aktual}</span></p>
                                 </div>
                             )) : <p className="text-sm italic text-gray-500">Tidak ada KPI yang dinilai pada periode ini untuk area ini.</p>}
                         </div>
@@ -70,13 +80,16 @@ export default function KpiDetailDialog({ areaName, onClose }) {
                             onChange={(e) => setNote(e.target.value)}
                             rows="4"
                             className="textarea textarea-bordered w-full"
-                            placeholder="Tuliskan evaluasi spesifik untuk area ini..."
+                            placeholder={isAdmin ? "Tuliskan evaluasi..." : "Tidak ada catatan."}
+                            readOnly={!isAdmin}
                         />
                     </div>
-                    <div className="flex justify-between items-center pt-2">
-                        <button onClick={handleSaveNote} className="btn btn-primary">Simpan Catatan</button>
-                        {message && <p className="text-sm text-green-600 font-semibold animate-pulse">{message}</p>}
-                    </div>
+                    {isAdmin && (
+                        <div className="flex justify-between items-center pt-2">
+                            <button onClick={handleSaveNote} className="btn btn-primary">Simpan Catatan</button>
+                            {message && <p className="text-sm text-green-600 font-semibold">{message}</p>}
+                        </div>
+                    )}
                 </div>
             )}
         </Modal>
