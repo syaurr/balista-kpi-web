@@ -489,3 +489,17 @@ export async function getDashboardPageData(periode) {
     error: null,
   };
 }
+
+export async function fetchUserRole() {
+    const supabase = createClient(cookies());
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: karyawan } = await supabase
+        .from('karyawan')
+        .select('role')
+        .eq('email', user.email)
+        .single();
+    
+    return karyawan?.role;
+}

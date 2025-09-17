@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { saveFullAssessment, addRecommendation, fetchAssessmentData, updateRecommendation, deleteRecommendation } from '../app/actions';
+import { saveFullAssessment, addRecommendation, fetchAssessmentData, updateRecommendation, deleteRecommendation, fetchUserRole } from '../app/actions';
 import ScoreCard from './ScoreCard';
 import Modal from './Modal';
 import AreaDonutChart from './AreaDonutChart';
@@ -32,6 +32,17 @@ function LinkModal({ kpi, onClose }) {
 export default function AssessmentClient({ employees, initialAssessmentData }) {
     const router = useRouter();
     const searchParams = useSearchParams();
+
+    const [userRole, setUserRole] = useState(null);
+
+    useEffect(() => {
+        // Ambil role user yang sedang login di sisi klien
+        const getUserRole = async () => {
+            const role = await fetchUserRole();
+            setUserRole(role);
+        };
+        getUserRole();
+    }, []);
 
     const selectedEmployeeId = searchParams.get('karyawanId') || '';
     const currentMonth = searchParams.get('bulan') || (new Date().getMonth() + 1).toString().padStart(2, '0');
@@ -271,8 +282,12 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                         
                         <div className="space-y-8">
 
-                            <div className="h-96 w-full">
-                                <AreaDonutChart areaScores={chartAreaScores} />
+                           <div className="h-96 w-full">
+                                {/* --- KIRIM userRole KE AreaDonutChart --- */}
+                                <AreaDonutChart 
+                                    areaScores={chartAreaScores} 
+                                    userRole={userRole} 
+                                />
                             </div>
 
                             {/* Bagian Rekomendasi */}
