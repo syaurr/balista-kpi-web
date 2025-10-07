@@ -4,14 +4,15 @@ import { redirect } from 'next/navigation';
 import Sidebar from '../../components/Sidebar'; // <-- Import komponen baru
 
 export default async function DashboardLayout({ children }) {
-  const supabase = createClient(cookies());
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  const supabase = createClient(cookies());
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
 
-  const { data: karyawan } = await supabase
-    .from('karyawan').select('nama, role, posisi').eq('email', user.email).single();
-  
-  const isAdmin = karyawan?.role === 'Admin';
+  // --- PERBAIKAN QUERY: Ambil juga kolom 'xp' ---
+  const { data: karyawan } = await supabase
+    .from('karyawan').select('nama, role, posisi, xp').eq('email', user.email).single();
+  
+  const isAdmin = karyawan?.role === 'Admin';
 
   return (
     <div className="min-h-screen flex">

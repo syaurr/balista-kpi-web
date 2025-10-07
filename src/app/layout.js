@@ -1,5 +1,5 @@
 import { poppins } from './fonts';
-import './globals.css';
+import './globals.css'; // <-- PASTIKAN BARIS INI ADA
 
 export const metadata = {
   title: 'Balista KPI System',

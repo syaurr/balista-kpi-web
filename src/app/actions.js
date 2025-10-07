@@ -5,66 +5,128 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import * as XLSX from 'xlsx';
 
-// --- AWAL PERBAIKAN UTAMA DI SINI ---
+export async function enrollInTraining(trainingId) {
+    const supabase = createClient(cookies());
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'Anda harus login.' };
+
+    // Ambil ID Karyawan yang benar dari tabel 'karyawan'
+    const { data: karyawan } = await supabase.from('karyawan').select('id').eq('email', user.email).single();
+    if (!karyawan) return { error: 'Profil karyawan tidak ditemukan.' };
+
+    const periode = `${new Date().toLocaleString('id-ID', { month: 'long' })} ${new Date().getFullYear()}`;
+
+    const { error } = await supabase.from('karyawan_training_plan').insert({
+        karyawan_id: karyawan.id, // Gunakan ID yang benar
+        training_program_id: trainingId,
+        periode: periode,
+        status: 'Sedang Berjalan',
+        assigned_by: 'Inisiatif Sendiri'
+    });
+
+    if (error) {
+        if (error.code === '23505') return { error: 'Anda sudah terdaftar di training ini pada periode yang sama.' };
+        console.error("Enroll error:", error);
+        return { error: 'Gagal mendaftar training.' };
+    }
+
+    revalidatePath('/dashboard/learning-plan');
+    revalidatePath('/dashboard/training');
+    return { success: 'Berhasil mendaftar training!' };
+}
+
+
+// --- FUNGSI addTrainingProgram YANG SUDAH DI-UPGRADE ---
 export async function addTrainingProgram(formData) {
     const supabase = createClient(cookies());
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'Anda harus login.' };
 
-    const { data: karyawan } = await supabase.from('karyawan').select('role').eq('email', user.email).single();
-    const role = karyawan?.role === 'Admin' ? 'Admin' : 'User';
+    const { data: karyawan } = await supabase.from('karyawan').select('role, id').eq('email', user.email).single();
+    if (!karyawan) return { error: 'Profil karyawan tidak ditemukan.' };
+    
+    const role = karyawan.role;
+    const isPaid = formData.get('biaya') === 'Berbayar';
+    
+    // Logika status: Usulan user yang berbayar harus menunggu persetujuan Admin
+    const status = (role === 'User' && isPaid) ? 'Menunggu Persetujuan' : 'Akan Datang';
+    const periode = `${new Date().toLocaleString('id-ID', { month: 'long' })} ${new Date().getFullYear()}`;
 
     const programData = {
         nama_program: formData.get('nama_program'),
         penyedia: formData.get('penyedia'),
         topik_utama: formData.get('topik_utama'),
         link_akses: formData.get('link_akses'),
+        status: status,
         biaya: formData.get('biaya'),
-        status: formData.get('status'),
-        tanggal_mulai: formData.get('tanggal_mulai') || null,
-        tanggal_berakhir: formData.get('tanggal_berakhir') || null,
-        posisi: formData.getAll('posisi'),
-        created_by_role: role
+        biaya_nominal: isPaid ? parseInt(formData.get('biaya_nominal') || 0, 10) : null,
+        created_by_role: role,
+        posisi: formData.getAll('posisi') || null,
     };
 
-    // 1. Simpan data utama ke tabel training_programs dan dapatkan ID-nya
-    const { data: newProgram, error: programError } = await supabase
-        .from('training_programs')
-        .insert(programData)
-        .select('id')
-        .single();
-
-    if (programError) {
-        console.error(programError);
-        return { error: 'Gagal menambah program.' };
+    const { data: newProgram, error: programError } = await supabase.from('training_programs').insert(programData).select('id').single();
+    if (programError) return { error: 'Gagal menambah program.' };
+    
+    const linked_areas = formData.getAll('linked_areas');
+    if (linked_areas && linked_areas.length > 0) {
+        const linksToInsert = linked_areas.map(areaName => ({ training_program_id: newProgram.id, area_name: areaName }));
+        await supabase.from('training_area_link').insert(linksToInsert);
     }
 
-    // 2. Ambil ID KPI yang dipilih dari form
-    const selectedKpiIds = formData.getAll('kpi_ids');
-
-    // 3. Jika ada KPI yang dipilih, simpan hubungannya ke tabel link
-    if (selectedKpiIds && selectedKpiIds.length > 0) {
-        const linksToInsert = selectedKpiIds.map(kpiId => ({
+    // Jika user yang mengusulkan & trainingnya gratis, langsung daftarkan dia
+    if (role === 'User' && !isPaid) {
+        await supabase.from('karyawan_training_plan').insert({
+            karyawan_id: karyawan.id,
             training_program_id: newProgram.id,
-            kpi_master_id: kpiId
-        }));
-
-        const { error: linkError } = await supabase.from('training_kpi_link').insert(linksToInsert);
-        if (linkError) {
-            console.error(linkError);
-            return { error: 'Gagal menyimpan hubungan KPI.' };
-        }
+            periode: periode,
+            status: 'Sedang Berjalan',
+            assigned_by: 'Inisiatif Sendiri'
+        });
     }
-
+    
     revalidatePath('/dashboard/training');
     revalidatePath('/dashboard/admin/training');
-    return { success: 'Program baru berhasil ditambahkan!' };
+    revalidatePath('/dashboard/learning-plan');
+    
+    const successMessage = isPaid && role === 'User' 
+        ? 'Usulan training berbayar Anda berhasil dikirim dan menunggu persetujuan Admin!'
+        : 'Training berhasil ditambahkan!';
+        
+    return { success: successMessage, shouldRedirect: role === 'User' && !isPaid };
 }
 
+// --- FUNGSI BARU UNTUK PERSETUJUAN OLEH ADMIN ---
+
+export async function approveTraining(trainingId) {
+    const supabase = createClient(cookies());
+    const { error } = await supabase
+        .from('training_programs')
+        .update({ status: 'Akan Datang' })
+        .eq('id', trainingId);
+    
+    if (error) return { error: 'Gagal menyetujui training.' };
+    revalidatePath('/dashboard/admin/training');
+    return { success: 'Training berhasil disetujui!' };
+}
+
+export async function rejectTraining(trainingId) {
+    const supabase = createClient(cookies());
+    const { error } = await supabase
+        .from('training_programs')
+        .update({ status: 'Ditolak' })
+        .eq('id', trainingId);
+        // Alternatif: .delete().eq('id', trainingId) jika ingin dihapus permanen
+
+    if (error) return { error: 'Gagal menolak training.' };
+    revalidatePath('/dashboard/admin/training');
+    return { success: 'Training berhasil ditolak.' };
+}
 
 export async function updateTrainingProgram(formData) {
     const supabase = createClient(cookies());
-    const id = formData.get('id');
+    const programId = formData.get('id');
+    const linked_areas = formData.getAll('linked_areas');
+
     const updatedData = {
         nama_program: formData.get('nama_program'),
         penyedia: formData.get('penyedia'),
@@ -76,9 +138,29 @@ export async function updateTrainingProgram(formData) {
         tanggal_berakhir: formData.get('tanggal_berakhir') || null,
         posisi: formData.getAll('posisi')
     };
-    const { error } = await supabase.from('training_programs').update(updatedData).eq('id', id);
-    if (error) { console.error(error); return { error: 'Gagal memperbarui program.' }; }
+
+    // 1. Perbarui data training utama
+    const { error: updateError } = await supabase.from('training_programs').update(updatedData).eq('id', programId);
+    if (updateError) {
+        console.error('Update training error:', updateError);
+        return { error: 'Gagal memperbarui program.' };
+    }
+
+    // 2. Perbarui hubungan di tabel training_area_link (Hapus yang lama, masukkan yang baru)
+    const { error: deleteError } = await supabase.from('training_area_link').delete().eq('training_program_id', programId);
+    if (deleteError) return { error: 'Gagal menghapus link area lama.' };
+
+    if (linked_areas && linked_areas.length > 0) {
+        const linksToInsert = linked_areas.map(areaName => ({
+            training_program_id: programId,
+            area_name: areaName
+        }));
+        const { error: insertError } = await supabase.from('training_area_link').insert(linksToInsert);
+        if (insertError) return { error: 'Gagal menyimpan link area baru.' };
+    }
+
     revalidatePath('/dashboard/admin/training');
+    return { success: 'Program berhasil diperbarui!' };
 }
 
 export async function deleteTrainingProgram(formData) {
@@ -460,7 +542,7 @@ export async function deleteRecommendation(formData) {
 }
 
 export async function getDashboardPageData(periode) {
-  const supabase = createClient(cookies()); // Selalu gunakan cookies() di server component/action
+  const supabase = createClient(cookies());
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { user: null, data: null, error: 'User not authenticated' };
 
@@ -471,11 +553,24 @@ export async function getDashboardPageData(periode) {
   const karyawanId = karyawan.id;
   const posisi = karyawan.posisi;
 
-  const [rekapResult, areaScoresResult, recommendationsResult, summaryResult] = await Promise.all([
+  // Ambil semua data yang dibutuhkan untuk periode yang dipilih secara paralel
+  const [
+    rekapResult, 
+    areaScoresResult, 
+    recommendationsResult, 
+    summaryResult,
+    recommendedTrainingsResult // <-- Query baru
+  ] = await Promise.all([
     supabase.rpc('get_rekap_kpi_data', { p_karyawan_id: karyawanId, p_posisi: posisi, p_periode: periode }),
     supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
     supabase.from('kpi_summary_recommendations').select('rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
-    supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single()
+    supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single(),
+    // Query baru untuk mengambil training yang statusnya 'Disarankan'
+    supabase.from('karyawan_training_plan')
+            .select('id, training_programs(nama_program)')
+            .eq('karyawan_id', karyawanId)
+            .eq('periode', periode)
+            .eq('status', 'Disarankan')
   ]);
 
   return {
@@ -485,6 +580,7 @@ export async function getDashboardPageData(periode) {
       areaScores: areaScoresResult.data || [],
       recommendations: recommendationsResult.data || [],
       summary: summaryResult.data || { catatan_kpi: `Belum ada catatan umum untuk periode ${periode}.` },
+      recommendedTrainings: recommendedTrainingsResult.data || [] // <-- Data baru
     },
     error: null,
   };
@@ -502,4 +598,203 @@ export async function fetchUserRole() {
         .single();
     
     return karyawan?.role;
+}
+
+// --- FUNGSI-FUNGSI BARU UNTUK FITUR TRAINING ---
+
+/**
+ * Mengubah status rencana training seorang karyawan.
+ * Misalnya dari 'Disarankan' menjadi 'Sedang Berjalan'.
+ * @param {string} planId - UUID dari tabel karyawan_training_plan.
+ * @param {string} newStatus - Status baru ('Sedang Berjalan', 'Menunggu Verifikasi', 'Selesai').
+ */
+export async function updateTrainingPlanStatus(planId, newStatus) {
+    const supabase = createClient(cookies());
+    const { error } = await supabase
+        .from('karyawan_training_plan')
+        .update({ status: newStatus })
+        .eq('id', planId);
+
+    if (error) {
+        console.error("Update plan status error:", error);
+        return { error: 'Gagal memperbarui status training.' };
+    }
+    revalidatePath('/dashboard/my-development'); // Refresh halaman 'Rencana Pengembangan'
+    return { success: 'Status training berhasil diperbarui!' };
+}
+
+/**
+ * Menambahkan entri progres baru, termasuk mengunggah file bukti ke Supabase Storage.
+ * @param {FormData} formData - Data dari form yang berisi plan_id, deskripsi, dan file.
+ */
+
+async function awardXpAndCheckBadges(userId, xpAmount) {
+    const supabase = createClient(cookies());
+    // Panggil fungsi RPC yang baru
+    const { error } = await supabase.rpc('award_xp_and_update_level', { 
+        p_user_id: userId, 
+        p_xp_amount: xpAmount 
+    });
+    if (error) console.error("Error awarding XP and Level:", error);
+}
+
+export async function addTrainingProgress(planId, deskripsi, fileUrl) {
+    const supabase = createClient(); // Tidak perlu cookies() karena kita tidak baca request
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "User tidak terautentikasi." };
+
+    if (!planId || !deskripsi) {
+        return { error: 'Informasi progres tidak lengkap.' };
+    }
+
+    // Langsung simpan data ke database
+    const { error: dbError } = await supabase
+        .from('training_progress_updates')
+        .insert({
+            plan_id: planId,
+            deskripsi_progress: deskripsi,
+            file_bukti_url: fileUrl // fileUrl bisa null jika tidak ada file yang diunggah
+        });
+    
+    if (dbError) {
+        console.error('Save progress error:', dbError);
+        return { error: 'Gagal menyimpan data progres.' };
+    }
+
+    // Beri hadiah XP, tidak peduli ada file atau tidak
+    await awardXpAndCheckBadges(user.id, 10);
+
+    revalidatePath('/dashboard/learning-plan');
+    return { success: 'Progres berhasil ditambahkan!' };
+}   
+
+/**
+ * Fungsi utama untuk menghasilkan rekomendasi training untuk semua karyawan
+ * berdasarkan kinerja mereka pada periode tertentu.
+ * @param {string} periode - Periode yang akan dianalisis, misal: "Agustus 2025"
+ */
+export async function generateTrainingRecommendations(periode) {
+    console.log(`--- Memulai proses pembuatan rekomendasi untuk periode: ${periode} ---`);
+    const supabase = createClient(cookies());
+
+    const { data: employees, error: empError } = await supabase
+        .from('karyawan')
+        .select('id, nama, posisi');
+
+    if (empError) {
+        console.error("Gagal mengambil data karyawan:", empError);
+        return { error: "Gagal mengambil data karyawan." };
+    }
+
+    let recommendationsCreated = 0;
+    let details = []; // <-- Buat array untuk menampung detail
+    
+    for (const employee of employees) {
+        console.log(`\nMenganalisis karyawan: ${employee.nama}`);
+
+        // --- LANGKAH BARU: Bersihkan rekomendasi lama yang tidak diambil ---
+        console.log(` -> Membersihkan rekomendasi usang...`);
+        const { error: cleanupError } = await supabase
+            .from('karyawan_training_plan')
+            .update({ status: 'Kedaluwarsa' })
+            .eq('karyawan_id', employee.id)
+            .eq('status', 'Disarankan')
+            .neq('periode', periode); // Targetkan semua periode KECUALI periode saat ini
+
+        if (cleanupError) {
+            console.error(` -> Gagal membersihkan rekomendasi lama untuk ${employee.nama}:`, cleanupError);
+        }
+        // --- AKHIR LANGKAH BARU ---
+
+        const { data: areaScores, error: scoreError } = await supabase.rpc(
+            'get_average_scores_by_area', 
+            { p_karyawan_id: employee.id, p_periode: periode }
+        );
+
+        if (scoreError || !areaScores || areaScores.length === 0) {
+            console.log(` -> Tidak ada data skor ditemukan untuk ${employee.nama} pada periode ini. Dilewati.`);
+            continue;
+        }
+        
+        const lowestArea = areaScores.filter(s => s.average_score > 0).sort((a, b) => a.average_score - a.average_score)[0];
+        
+        if (!lowestArea) {
+            console.log(` -> Semua skor area adalah 0 untuk ${employee.nama}. Dilewati.`);
+            continue;
+        }
+
+        console.log(` -> Area terendah ditemukan: "${lowestArea.area}" dengan skor ${lowestArea.average_score.toFixed(2)}`);
+
+        const { data: linkedTrainings, error: linkError } = await supabase
+            .from('training_area_link')
+            .select('training_program_id')
+            .eq('area_name', lowestArea.area);
+
+        if (linkError || !linkedTrainings || linkedTrainings.length === 0) {
+            console.log(` -> Tidak ada training yang cocok ditemukan untuk area "${lowestArea.area}".`);
+            continue;
+        }
+
+        for (const training of linkedTrainings) {
+            const planToInsert = {
+                karyawan_id: employee.id,
+                training_program_id: training.training_program_id,
+                periode: periode,
+                status: 'Disarankan',
+                assigned_by: 'Sistem Otomatis'
+            };
+
+            const { error: upsertError } = await supabase
+                .from('karyawan_training_plan')
+                .upsert(planToInsert, { onConflict: 'karyawan_id, training_program_id, periode' });
+
+            if (upsertError) {
+                console.error(` -> Gagal memasukkan rekomendasi training untuk ${employee.nama}:`, upsertError.message);
+            } else {
+                console.log(` -> SUKSES: Rekomendasi training ditambahkan untuk ${employee.nama}.`);
+                recommendationsCreated++;
+            }
+
+            if (!upsertError) {
+                console.log(` -> SUKSES: Rekomendasi training ditambahkan untuk ${employee.nama}.`);
+                recommendationsCreated++;
+                // Tambahkan detail ke array
+                details.push(`- Untuk ${employee.nama}: ${training.nama_program || 'Training (ID: ' + training.training_program_id + ')'}`);
+            }
+        }
+    }
+
+    revalidatePath('/dashboard/training-directory');
+    console.log(`\n--- Proses Selesai. Total ${recommendationsCreated} rekomendasi dibuat/diperbarui. ---`);
+    revalidatePath('/dashboard/learning-plan');
+    return { 
+        success: `Proses selesai! ${recommendationsCreated} rekomendasi dibuat/diperbarui.`,
+        details: details // <-- Kirim detail ke client
+    };
+    
+}
+
+/**
+ * Digunakan oleh Admin untuk memverifikasi dan menyelesaikan rencana training.
+ * @param {string} planId - UUID dari tabel karyawan_training_plan.
+ */
+export async function verifyTrainingCompletion(planId) {
+    const supabase = createClient(cookies());
+    const { data: plan } = await supabase.from('karyawan_training_plan').select('karyawan_id').eq('id', planId).single();
+    const { error } = await supabase
+        .from('karyawan_training_plan')
+        .update({ status: 'Selesai' })
+        .eq('id', planId)
+        .eq('status', 'Menunggu Verifikasi'); // Keamanan tambahan: hanya verifikasi yang statusnya 'Menunggu Verifikasi'
+
+    if (error) {
+        console.error("Verify training error:", error);
+        return { error: 'Gagal memverifikasi training.' };
+    }
+    if (plan) {
+        await awardXpAndCheckBadges(plan.karyawan_id, 50);
+    }
+    
+    revalidatePath('/dashboard/admin/training-oversight');
+    return { success: 'Training berhasil diverifikasi dan diselesaikan!' };
 }

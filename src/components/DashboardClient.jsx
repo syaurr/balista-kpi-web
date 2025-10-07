@@ -1,71 +1,60 @@
-// src/components/DashboardClient.jsx
-
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import ScoreCard from './ScoreCard';
 import AreaDonutChart from './AreaDonutChart';
+import { updateTrainingPlanStatus } from '../app/actions';
 
 export default function DashboardClient({ user, initialData, initialMonth, initialYear, karyawanId, periode }) {
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const { rekap, areaScores, recommendations, summary } = initialData;
+    const { rekap, areaScores, recommendations, summary, recommendedTrainings } = initialData;
 
     const [month, setMonth] = useState(initialMonth);
     const [year, setYear] = useState(initialYear);
-    
-    useEffect(() => {
-        const params = new URLSearchParams(searchParams);
-        if (!params.get('karyawanId') && karyawanId) {
-            router.replace(`/dashboard?bulan=${month}&tahun=${year}&karyawanId=${karyawanId}`);
-        }
-    }, [karyawanId, month, year, searchParams, router]);
+    const [loading, setLoading] = useState(false);
 
     const handlePeriodChange = () => {
-        router.push(`/dashboard?bulan=${month}&tahun=${year}&karyawanId=${karyawanId}`);
+        router.push(`/dashboard?bulan=${month}&tahun=${year}`);
     };
 
-    // --- BLOK DEBUGGING FORENSIK ---
-    const { totalNilaiAkhir, nilaiProporsional } = useMemo(() => {
-        console.log("===================================");
-        console.log("MEMULAI KALKULASI FORENSIK useMemo");
-        console.log("===================================");
-        
-        let total = 0;
-        let totalBobot = 0;
+    const handleStartTraining = async (planId) => {
+        setLoading(true);
+        const result = await updateTrainingPlanStatus(planId, 'Sedang Berjalan');
+        if (result.error) {
+            alert(`Error: ${result.error}`);
+            setLoading(false);
+        } else {
+            alert('Status training berhasil diperbarui! Anda akan diarahkan ke halaman Learning Plan.');
+            router.push('/dashboard/learning-plan');
+        }
+    };
 
+    // --- AWAL PERBAIKAN LOGIKA PROPORSIONAL ---
+    const { totalNilaiAkhir, nilaiProporsional } = useMemo(() => {
         if (!rekap || rekap.length === 0) {
-            console.log("HASIL: 'rekap' kosong atau tidak ada. Mengembalikan 0.");
             return { totalNilaiAkhir: 0, nilaiProporsional: 0 };
         }
 
-        rekap.forEach((item, index) => {
-            const nilai = item.nilai_akhir;
-            const bobot = item.bobot;
-            const skor = item.skor_aktual;
+        let total = 0;
+        let totalBobotYangDinilai = 0;
 
-            const convertedNilai = Number(nilai) || 0;
-            const convertedBobot = Number(bobot) || 0;
-            const convertedSkor = Number(skor) || 0;
-
-            console.log(`[Item #${index}] NILAIAKHIR: Diterima '${nilai}' (Tipe: ${typeof nilai}), Dikonversi menjadi -> ${convertedNilai}`);
+        rekap.forEach(item => {
+            // Total Nilai Akhir dihitung dari semua KPI yang ada
+            total += parseFloat(item.nilai_akhir || 0);
             
-            total += convertedNilai;
-
-            if (convertedSkor > 0) {
-                console.log(`[Item #${index}] BOBOT: Diterima '${bobot}' (Tipe: ${typeof bobot}), Dikonversi menjadi -> ${convertedBobot}`);
-                totalBobot += convertedBobot;
+            // Total Bobot HANYA dihitung dari KPI yang skornya > 0,
+            // tidak peduli frekuensinya apa.
+            if (item.skor_aktual > 0) {
+                totalBobotYangDinilai += item.bobot;
             }
         });
-
-        console.log("-----------------------------------");
-        console.log(`HASIL AKHIR: Total Nilai = ${total}, Total Bobot = ${totalBobot}`);
-        console.log("===================================");
-
-        const proporsional = totalBobot > 0 ? (total / (totalBobot / 100.0)) : 0;
+        
+        const proporsional = totalBobotYangDinilai > 0 ? (total / (totalBobotYangDinilai / 100.0)) : 0;
         return { totalNilaiAkhir: total, nilaiProporsional: proporsional };
     }, [rekap]);
+    // --- AKHIR PERBAIKAN LOGIKA PROPORSIONAL ---
     
     const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
     const months = Array.from({ length: 12 }, (_, i) => ({
@@ -89,8 +78,41 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
             </div>
 
             <section className="mb-8">
+                <h2 className="text-2xl font-bold text-[#6b1815] mb-4">Rencana Pengembangan Bulan Ini</h2>
+                <div className="bg-white p-6 rounded-xl shadow-md">
+                    {recommendedTrainings.length > 0 ? (
+                        <div>
+                            <p className="text-gray-600 mb-4">Berdasarkan kinerjamu periode lalu, sistem merekomendasikan training berikut untukmu:</p>
+                            <div className="space-y-3">
+                                {/* --- AWAL PERBAIKAN: Ganti nama variabel 'rec' menjadi 'plan' --- */}
+                                {recommendedTrainings.map(plan => (
+                                    <div key={plan.id} className="p-3 bg-teal-50 rounded-lg flex justify-between items-center">
+                                        <span className="font-semibold text-teal-800">
+                                            {plan.training_programs.nama_program}
+                                        </span>
+                                        <button 
+                                            onClick={() => handleStartTraining(plan.id)}
+                                            disabled={loading}
+                                            className="btn btn-sm btn-success"
+                                        >
+                                            {loading ? '...' : 'Mulai Training'}
+                                        </button>
+                                    </div>
+                                ))}
+                                {/* --- AKHIR PERBAIKAN --- */}
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-gray-600">Kerja bagus! Tidak ada training yang secara khusus direkomendasikan untuk Anda berdasarkan kinerja periode ini.</p>
+                    )}
+                    <Link href="/dashboard/learning-plan" className="btn btn-sm btn-outline btn-primary mt-4">
+                        Lihat Semua Rencana Pengembangan
+                    </Link>
+                </div>
+            </section>
+            
+            <section className="mb-8">
                 <h2 className="text-2xl font-bold text-[#6b1815] mb-4">Ringkasan Kinerja Bulanan</h2>
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <ScoreCard title="Total Nilai Akhir Bulanan" value={totalNilaiAkhir} />
                     <ScoreCard title="Nilai Akhir Proporsional" value={nilaiProporsional} prominent={true} />
