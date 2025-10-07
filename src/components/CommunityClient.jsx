@@ -33,32 +33,69 @@ function ProfileView({ userData, earnedBadgeIds, allBadges }) {
 
 function DirectoryView({ directoryData }) {
     const [selectedEmployee, setSelectedEmployee] = useState(null);
-    const formatDate = (dateString) => new Date(dateString).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' });
+    
+    // Fungsi helper untuk format tanggal
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        return new Date(dateString).toLocaleDateString('id-ID', {
+            day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+    };
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-6 min-h-[60vh]">
-            <div className="md:col-span-1 border-r pr-6 max-h-[60vh] overflow-y-auto"><h3 className="text-lg font-bold text-gray-700 mb-4 sticky top-0 bg-white pb-2">Daftar Karyawan</h3><div className="space-y-2">
-                {directoryData.map(emp => (
-                    <button key={emp.id} onClick={() => setSelectedEmployee(emp)}
-                        className={`w-full text-left p-3 rounded-lg transition-colors text-sm ${selectedEmployee?.id === emp.id ? 'bg-teal-100 text-teal-800 font-bold' : 'hover:bg-gray-100'}`}>
-                        {emp.nama}<span className="block text-xs text-gray-400">{emp.posisi}</span>
-                    </button>
-                ))}
-            </div></div>
-            <div className="md:col-span-2">
+            {/* Kolom Kiri: Daftar Karyawan (Tidak ada perubahan) */}
+            <div className="md:col-span-1 border-r pr-6 max-h-[60vh] overflow-y-auto">
+                <h3 className="text-lg font-bold text-gray-700 mb-4 sticky top-0 bg-white pb-2">Daftar Karyawan</h3>
+                <div className="space-y-2">
+                    {directoryData.map(emp => (
+                        <button key={emp.id} onClick={() => setSelectedEmployee(emp)}
+                            className={`w-full text-left p-3 rounded-lg transition-colors text-sm ${selectedEmployee?.id === emp.id ? 'bg-teal-100 text-teal-800 font-bold' : 'hover:bg-gray-100'}`}>
+                            {emp.nama}<span className="block text-xs text-gray-400">{emp.posisi}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+            {/* Kolom Kanan: Detail Training (Dengan Perbaikan) */}
+            <div className="md:col-span-2 max-h-[60vh] overflow-y-auto">
                 {selectedEmployee ? (
                      <div className="space-y-4">
-                        <h2 className="text-2xl font-bold text-[#033f3f]">{selectedEmployee.nama}</h2>
-                        {selectedEmployee.karyawan_training_plan.map(plan => (
-                             <div key={plan.id} className="collapse collapse-arrow bg-base-100 border text-sm">
-                                <input type="checkbox" /><div className="collapse-title font-medium">
-                                    {plan.training_programs.nama_program} <div className="badge badge-sm badge-info">{plan.status}</div>
-                                </div><div className="collapse-content">
-                                     <ul className="list-disc list-inside pl-4">{plan.training_progress_updates.map(p => <li key={p.id}>{p.deskripsi_progress} ({formatDate(p.created_at)})</li>)}</ul>
+                        <h2 className="text-2xl font-bold text-[#033f3f] mb-4">{selectedEmployee.nama}</h2>
+                        {selectedEmployee.karyawan_training_plan.length > 0 ? selectedEmployee.karyawan_training_plan.map(plan => (
+                             <div key={plan.id} className="collapse collapse-arrow bg-base-100 border">
+                                <input type="checkbox" />
+                                <div className="collapse-title font-medium text-sm">
+                                    {plan.training_programs.nama_program}
+                                    {/* --- PERBAIKAN 1: WARNA STATUS DINAMIS --- */}
+                                    <div className={`badge badge-sm ml-2 ${
+                                        plan.status === 'Selesai' ? 'badge-success' :
+                                        plan.status === 'Sedang Berjalan' ? 'badge-info' :
+                                        plan.status === 'Menunggu Verifikasi' ? 'badge-warning' : 'badge-neutral'
+                                    }`}>{plan.status}</div>
+                                </div>
+                                <div className="collapse-content">
+                                     <ul className="list-disc list-inside text-sm text-gray-600 pl-4 space-y-2">
+                                        {plan.training_progress_updates
+                                            .sort((a,b) => new Date(b.created_at) - new Date(a.created_at))
+                                            .map(progress => (
+                                            <li key={progress.id}>
+                                                {progress.deskripsi_progress}
+                                                <span className="text-xs italic text-gray-400"> ({formatDate(progress.created_at)})</span>
+                                                {/* --- PERBAIKAN 2: TOMBOL LIHAT BUKTI --- */}
+                                                {progress.file_bukti_url && (
+                                                    <a href={progress.file_bukti_url} target="_blank" rel="noopener noreferrer" className="link link-primary ml-2 text-xs">
+                                                        Lihat Bukti
+                                                    </a>
+                                                )}
+                                            </li>
+                                        ))}
+                                        {plan.training_progress_updates.length === 0 && <li className="italic">Belum ada progres.</li>}
+                                    </ul>
                                 </div>
                             </div>
-                        ))}
+                        )) : <p className="text-gray-500 italic">Karyawan ini belum memiliki rencana training.</p>}
                     </div>
-                ) : <div className="flex items-center justify-center h-full"><p>Pilih karyawan untuk melihat detail.</p></div>}
+                ) : <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg"><p className="text-gray-500">Pilih karyawan untuk melihat detail.</p></div>}
             </div>
         </div>
     );

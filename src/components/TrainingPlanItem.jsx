@@ -1,6 +1,5 @@
 'use client';
 
-// --- PERBAIKAN 1: Import 'useRef' dari React ---
 import { useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '../utils/supabase/client'; 
@@ -9,8 +8,7 @@ import { addTrainingProgress, updateTrainingPlanStatus } from '../app/actions';
 export default function TrainingPlanItem({ plan, viewOnly = false }) {
     const [loading, setLoading] = useState(false);
     const router = useRouter();
-    // --- PERBAIKAN 2: Buat "kail" (ref) untuk form kita ---
-    const formRef = useRef(null);
+    const formRef = useRef(null); // Gunakan ref untuk form
 
     const trainingProgram = plan?.training_programs || { nama_program: 'Nama Training Tidak Ditemukan' };
     const progressUpdates = plan?.training_progress_updates || [];
@@ -22,18 +20,10 @@ export default function TrainingPlanItem({ plan, viewOnly = false }) {
         router.refresh();
     };
 
-    // --- PERBAIKAN 3: Rombak Total Logika Handle Submit ---
-     const handleProgressSubmit = async (event) => {
-        event.preventDefault();
+    // --- PERBAIKAN TOTAL: Logika Handle Submit ---
+    // Fungsi ini sekarang menerima 'formData' langsung dari 'action' prop
+    const handleProgressSubmitWithUpload = async (formData) => {
         setLoading(true);
-
-        // --- ALAT PELACAK ---
-        console.clear();
-        console.log("==============================================");
-        console.log("DEBUGGING DI SISI KLIEN: handleProgressSubmit");
-        console.log("==============================================");
-        console.log("[TAHAP 1] Data 'plan' yang ada di komponen ini:", plan);
-        console.log("[TAHAP 2] ID Rencana yang akan dikirim (plan.id):", plan?.id);
 
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
@@ -43,19 +33,10 @@ export default function TrainingPlanItem({ plan, viewOnly = false }) {
             return;
         }
 
-        const formData = new FormData(formRef.current);
         const deskripsi = formData.get('deskripsi');
         const file = formData.get('fileBukti');
         let fileUrl = null;
 
-        if (!plan?.id) {
-            alert("FATAL ERROR: ID Rencana Training tidak ditemukan. Proses tidak bisa dilanjutkan.");
-            console.error("KESIMPULAN: 'plan.id' adalah undefined atau null. Ini adalah akar masalahnya.");
-            setLoading(false);
-            return;
-        }
-
-        console.log("[TAHAP 3] Memulai proses unggah file...");
         if (file && file.size > 0) {
             const filePath = `${user.id}/${Date.now()}-${file.name}`;
             const { error: uploadError } = await supabase.storage
@@ -71,22 +52,15 @@ export default function TrainingPlanItem({ plan, viewOnly = false }) {
             const { data: urlData } = supabase.storage
                 .from('file_bukti_training').getPublicUrl(filePath);
             fileUrl = urlData.publicUrl;
-            console.log("[TAHAP 4] File berhasil diunggah. URL:", fileUrl);
-        } else {
-            console.log("[TAHAP 4] Tidak ada file yang diunggah.");
         }
 
-        console.log("[TAHAP 5] Memanggil server action 'addTrainingProgress'...");
         const result = await addTrainingProgress(plan.id, deskripsi, fileUrl);
         
-        console.log("[TAHAP 6] Menerima hasil dari server action:", result);
-        console.log("==============================================\n");
-
         if (result.error) {
             alert(`Error: ${result.error}`);
         } else {
             alert(result.success);
-            formRef.current.reset();
+            formRef.current?.reset(); // Reset form menggunakan ref
         }
 
         setLoading(false);
@@ -149,9 +123,8 @@ export default function TrainingPlanItem({ plan, viewOnly = false }) {
                     </div>
 
                     <div className="border-t lg:border-t-0 lg:border-l lg:pl-8 pt-4 lg:pt-0">
-                        {/* --- PERBAIKAN: Kondisi Tampilan Form --- */}
                         {!viewOnly && plan.status === 'Sedang Berjalan' ? (
-                            <form id={`form-${plan.id}`} action={handleProgressSubmit} className="space-y-3">
+                            <form ref={formRef} action={handleProgressSubmitWithUpload} className="space-y-3">
                                 <h3 className="font-bold text-gray-800">Tambah Progres Baru</h3>
                                 <div>
                                     <label className="label text-sm"><span className="label-text">Deskripsi Progres</span></label>
@@ -177,4 +150,3 @@ export default function TrainingPlanItem({ plan, viewOnly = false }) {
         </div>
     );
 }
-
