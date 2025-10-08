@@ -1,28 +1,30 @@
+// --- AWAL PERBAIKAN: Perbaiki semua path import ---
 import { createClient } from '../../../../utils/supabase/server';
 import { cookies } from 'next/headers';
 import TrainingManagementClient from '../../../../components/TrainingManagementClient';
+// --- AKHIR PERBAIKAN ---
 
 async function getTrainingAdminData() {
     const supabase = createClient(cookies());
 
     const [trainingsResult, positionsResult, areasResult] = await Promise.all([
+        // Ambil data training beserta link areanya
         supabase.from('training_programs').select('*, training_area_link(area_name)').order('created_at', { ascending: false }),
         supabase.from('karyawan').select('posisi').order('posisi'),
-        // --- AWAL PERBAIKAN: Ambil data dari kolom 'area' ---
+        // Ambil daftar unik area dari master kpi
         supabase.from('kpi_master').select('area').neq('area', null)
     ]);
     
-    const uniquePositions = [...new Map(positionsResult.data.map(item => [item['posisi'], item])).values()];
-    // --- PERBAIKAN LANJUTAN: Buat daftar unik dari kolom 'area' ---
-    const uniqueAreas = [...new Set(areasResult.data.map(item => item.area))];
+    // Pastikan data tidak null sebelum di-map
+    const uniquePositions = positionsResult.data ? [...new Map(positionsResult.data.map(item => [item['posisi'], item])).values()] : [];
+    const uniqueAreas = areasResult.data ? [...new Set(areasResult.data.map(item => item.area))] : [];
 
     return {
         trainings: trainingsResult.data || [],
-        allPositions: uniquePositions || [],
-        allAreas: uniqueAreas || []
+        allPositions: uniquePositions,
+        allAreas: uniqueAreas
     };
 }
-
 
 export default async function AdminTrainingPage() {
     const { trainings, allPositions, allAreas } = await getTrainingAdminData();

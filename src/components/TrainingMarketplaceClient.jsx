@@ -6,7 +6,7 @@ import { enrollInTraining } from '../app/actions';
 import Modal from './Modal';
 import AddTrainingForm from './AddTrainingForm';
 
-// Komponen untuk satu kartu training yang bisa dibuka-tutup
+// --- AWAL DESAIN BARU: Komponen Kartu Training yang Detail ---
 function TrainingCard({ training }) {
     const [loading, setLoading] = useState(false);
     const router = useRouter();
@@ -23,24 +23,69 @@ function TrainingCard({ training }) {
         }
     };
 
+    // Fungsi helper untuk format tanggal
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        return new Date(dateString).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+    };
+
+    // Fungsi helper untuk format Rupiah
+    const formatRupiah = (number) => {
+        if (number === null || number === undefined) return '-';
+        return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
+    };
+
     return (
-        <details className="collapse collapse-arrow bg-white shadow-xl border">
-            <summary className="collapse-title text-md font-bold text-[#033f3f]">
-                {training.nama_program}
-            </summary>
-            <div className="collapse-content space-y-3">
-                <p className="text-sm"><span className="font-semibold">Penyedia:</span> {training.penyedia || '-'}</p>
-                <p className="text-sm"><span className="font-semibold">Topik:</span> {training.topik_utama || '-'}</p>
-                <p className="text-sm"><span className="font-semibold">Area Terkait:</span> {training.training_area_link.map(l => l.area_name).join(', ') || 'Umum'}</p>
-                <div className="card-actions justify-end mt-4">
-                    <button onClick={handleEnroll} disabled={loading} className="btn btn-sm btn-primary">
-                        {loading ? 'Mendaftar...' : 'Ikuti Training Ini'}
-                    </button>
+        <div className="card bg-white shadow-xl border transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 flex flex-col">
+            <div className="card-body p-6 flex-grow">
+                {/* Status Badge di pojok kanan atas */}
+                <div className="badge badge-info absolute top-4 right-4 font-semibold">{training.status}</div>
+                
+                {/* Judul & Penyedia */}
+                <h2 className="card-title text-md font-bold text-[#033f3f] leading-snug pr-16">
+                    {training.nama_program}
+                </h2>
+                <p className="text-sm text-gray-500">Oleh: {training.penyedia || '-'}</p>
+                <p className="text-xs text-gray-500 mb-2">Topik: {training.topik_utama || '-'}</p>
+
+                <div className="divider my-1"></div>
+
+                {/* Detail Jadwal & Biaya */}
+                <div className="text-xs space-y-2 text-gray-600">
+                    <p><span className="font-semibold">Jadwal:</span> {formatDate(training.tanggal_mulai)} - {formatDate(training.tanggal_berakhir)}</p>
+                    <p><span className="font-semibold">Biaya:</span> {training.biaya === 'Berbayar' ? formatRupiah(training.biaya_nominal) : 'Gratis'}</p>
+                </div>
+
+                {/* Posisi Terkait */}
+                <div className="mt-3">
+                    <h3 className="text-xs font-bold uppercase text-gray-400 mb-2">Untuk Posisi:</h3>
+                    <div className="flex flex-wrap gap-1">
+                        {training.posisi && training.posisi.length > 0 ? (
+                            training.posisi.map(p => (
+                                <div key={p} className="badge badge-outline badge-sm">{p}</div>
+                            ))
+                        ) : (
+                            <div className="badge badge-ghost badge-sm">Semua Posisi</div>
+                        )}
+                    </div>
                 </div>
             </div>
-        </details>
+
+            {/* Bagian Bawah Kartu: Tombol Aksi */}
+            <div className="card-actions justify-between items-center p-6 pt-0">
+                {training.link_akses ? (
+                    <a href={training.link_akses} target="_blank" rel="noopener noreferrer" className="btn btn-xs btn-ghost text-blue-600">
+                        Link Info
+                    </a>
+                ) : <div></div>}
+                <button onClick={handleEnroll} disabled={loading} className="btn btn-sm btn-primary">
+                    {loading ? 'Mendaftar...' : 'Ikuti Training Ini'}
+                </button>
+            </div>
+        </div>
     );
 }
+// --- AKHIR DESAIN BARU ---
 
 // Komponen utama halaman marketplace
 export default function TrainingMarketplaceClient({ trainings, allAreas }) {
@@ -56,7 +101,7 @@ export default function TrainingMarketplaceClient({ trainings, allAreas }) {
                 {trainings.map(training => (
                     <TrainingCard key={training.id} training={training} />
                 ))}
-                 {trainings.length === 0 && <p className="col-span-full text-center text-gray-500 italic">Saat ini belum ada training yang tersedia di katalog.</p>}
+                 {trainings.length === 0 && <p className="col-span-full text-center text-gray-500 italic">Saat ini belum ada training yang tersedia untuk posisi Anda.</p>}
             </div>
             {isAddModalOpen && (
                 <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Usulkan Training Eksternal">

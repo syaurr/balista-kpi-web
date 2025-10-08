@@ -4,11 +4,15 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from './Modal';
 import ImportForm from './ImportForm';
-import { addTrainingProgram, updateTrainingProgram, approveTraining, rejectTraining } from '../app/actions';
+import { addTrainingProgram, updateTrainingProgram, approveTraining, rejectTraining, deleteTrainingProgram } from '../app/actions';
 
 // Komponen Form untuk Tambah/Edit (tidak ada perubahan di sini)
 function TrainingForm({ training, allPositions, allAreas, onFinished }) {
     const [loading, setLoading] = useState(false);
+    // State untuk menampilkan input biaya nominal secara kondisional
+    const [isPaid, setIsPaid] = useState(training?.biaya === 'Berbayar');
+    
+    // Tentukan aksi yang akan digunakan (tambah atau perbarui)
     const action = training ? updateTrainingProgram : addTrainingProgram;
 
     const handleSubmit = async (event) => {
@@ -26,14 +30,17 @@ function TrainingForm({ training, allPositions, allAreas, onFinished }) {
         setLoading(false);
     };
     
+    // Ambil data area yang sudah terhubung dengan training ini (untuk mode edit)
     const linkedAreas = training?.training_area_link.map(link => link.area_name) || [];
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
             {training?.id && <input type="hidden" name="id" value={training.id} />}
+            
             <div><label className="block text-sm font-medium">Nama Program</label><input type="text" name="nama_program" defaultValue={training?.nama_program} className="input input-bordered w-full" required /></div>
+            
             <div><label className="block text-sm font-medium">Area KPI Terkait</label>
-                <div className="bg-gray-50 p-2 rounded-md max-h-32 overflow-y-auto grid grid-cols-2 gap-2">
+                <div className="bg-gray-50 p-2 rounded-md max-h-32 overflow-y-auto grid grid-cols-2 gap-2 mt-1">
                     {allAreas.map(area => (
                         <label key={area} className="label cursor-pointer space-x-2 justify-start">
                             <input type="checkbox" name="linked_areas" value={area} defaultChecked={linkedAreas.includes(area)} className="checkbox checkbox-sm" />
@@ -42,15 +49,46 @@ function TrainingForm({ training, allPositions, allAreas, onFinished }) {
                     ))}
                 </div>
             </div>
+
             <div><label className="block text-sm font-medium">Penyedia</label><input type="text" name="penyedia" defaultValue={training?.penyedia} className="input input-bordered w-full" /></div>
-            <div><label className="block text-sm font-medium">Link Akses</label><input type="url" name="link_akses" defaultValue={training?.link_akses} className="input input-bordered w-full" /></div>
-            <div><label className="block text-sm font-medium">Posisi Terkait (Tahan Ctrl/Cmd untuk memilih lebih dari satu)</label><select name="posisi" multiple defaultValue={training?.posisi || []} className="select select-bordered w-full h-32">{allPositions.map(p => <option key={p.posisi} value={p.posisi}>{p.posisi}</option>)}</select></div>
+            <div><label className="block text-sm font-medium">Topik Utama</label><input type="text" name="topik_utama" defaultValue={training?.topik_utama} className="input input-bordered w-full" /></div>
+            <div><label className="block text-sm font-medium">Link Akses/Informasi</label><input type="url" name="link_akses" defaultValue={training?.link_akses} className="input input-bordered w-full" /></div>
+            
             <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium">Status</label><select name="status" defaultValue={training?.status || 'Akan Datang'} className="select select-bordered w-full"><option>Akan Datang</option><option>Berlangsung</option><option>Expired</option></select></div>
-                <div><label className="block text-sm font-medium">Biaya</label><select name="biaya" defaultValue={training?.biaya || 'Gratis'} className="select select-bordered w-full"><option>Gratis</option><option>Berbayar</option></select></div>
+                <div><label className="block text-sm font-medium">Tanggal Mulai</label><input type="date" name="tanggal_mulai" defaultValue={training?.tanggal_mulai?.split('T')[0]} className="input input-bordered w-full"/></div>
+                <div><label className="block text-sm font-medium">Tanggal Berakhir</label><input type="date" name="tanggal_berakhir" defaultValue={training?.tanggal_berakhir?.split('T')[0]} className="input input-bordered w-full"/></div>
             </div>
+            
+            <div><label className="block text-sm font-medium">Posisi Terkait (Tahan Ctrl/Cmd untuk memilih)</label><select name="posisi" multiple defaultValue={training?.posisi || []} className="select select-bordered w-full h-32">{allPositions.map(p => <option key={p.posisi} value={p.posisi}>{p.posisi}</option>)}</select></div>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium">Biaya</label>
+                    <select name="biaya" defaultValue={training?.biaya || 'Gratis'} onChange={(e) => setIsPaid(e.target.value === 'Berbayar')} className="select select-bordered w-full">
+                        <option>Gratis</option>
+                        <option>Berbayar</option>
+                    </select>
+                </div>
+                {isPaid && (
+                     <div>
+                        <label className="block text-sm font-medium">Biaya Nominal (Rp)</label>
+                        <input type="number" name="biaya_nominal" defaultValue={training?.biaya_nominal} className="input input-bordered w-full" placeholder="500000" />
+                    </div>
+                )}
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium">Status Program</label>
+                <select name="status" defaultValue={training?.status || 'Akan Datang'} className="select select-bordered w-full">
+                    <option>Akan Datang</option>
+                    <option>Berlangsung</option>
+                    <option>Expired</option>
+                    <option>Ditolak</option>
+                </select>
+            </div>
+
             <div className="pt-4 flex justify-end">
-                <button type="submit" disabled={loading} className="btn btn-primary w-full">{loading ? 'Menyimpan...' : 'Simpan'}</button>
+                <button type="submit" disabled={loading} className="btn btn-primary w-full">{loading ? 'Menyimpan...' : 'Simpan Perubahan'}</button>
             </div>
         </form>
     );
@@ -70,6 +108,22 @@ export default function TrainingManagementClient({ initialTrainings, allPosition
             if (result.error) alert(`Error: ${result.error}`);
             else alert(result.success);
             router.refresh();
+        }
+    };
+    
+    // --- FUNGSI BARU UNTUK MENGHANDLE PENGHAPUSAN ---
+    const handleDelete = async (training) => {
+        const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus program "${training.nama_program}" secara permanen? Tindakan ini tidak dapat dibatalkan.`);
+        if (confirmDelete) {
+            const formData = new FormData();
+            formData.append('id', training.id);
+            const result = await deleteTrainingProgram(formData);
+            if (result.error) {
+                alert(`Gagal menghapus: ${result.error}`);
+            } else {
+                alert('Program berhasil dihapus.');
+                router.refresh();
+            }
         }
     };
 
@@ -93,6 +147,11 @@ export default function TrainingManagementClient({ initialTrainings, allPosition
     [initialTrainings]);
 
     const trainingsToDisplay = view === 'Semua' ? otherTrainings : pendingTrainings;
+    
+    const formatDate = (dateString) => {
+        if (!dateString) return '-';
+        return new Date(dateString).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+    };
 
     const formatRupiah = (number) => {
         if (number === null || number === undefined) return '-';
@@ -125,40 +184,58 @@ export default function TrainingManagementClient({ initialTrainings, allPosition
                     <table className="table table-zebra w-full">
                         <thead>
                             <tr>
-                                <th>Nama Program & Penyedia</th>
-                                <th>Area KPI Terkait</th>
-                                <th>Status</th>
+                                <th>Program / Penyedia</th>
+                                <th>Posisi & Area Terkait</th>
+                                <th>Jadwal</th>
                                 <th>Biaya</th>
-                                <th>Link</th>
+                                <th>Status</th>
                                 <th className="text-right">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
                             {trainingsToDisplay.map(training => (
                                 <tr key={training.id}>
-                                    <td>
+                                    <td className="align-top">
                                         <div className="font-bold">{training.nama_program}</div>
-                                        <div className="text-xs opacity-70">{training.penyedia}</div>
+                                        <div className="text-xs opacity-70">Oleh: {training.penyedia || '-'}</div>
+                                        <div className="text-xs opacity-70">Topik: {training.topik_utama || '-'}</div>
+                                        {training.link_akses && <a href={training.link_akses} target="_blank" rel="noopener noreferrer" className="btn btn-xs btn-outline mt-2">Link Info</a>}
                                     </td>
-                                    <td className="text-xs max-w-xs">{training.training_area_link.map(l => l.area_name).join(', ')}</td>
-                                    <td><div className="badge badge-ghost badge-sm">{training.status}</div></td>
-                                    <td>
+                                    <td className="align-top">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="font-semibold text-xs">Posisi:</div>
+                                            <div className="flex flex-wrap gap-1 max-w-xs">
+                                                {training.posisi?.map(p => <div key={p} className="badge badge-outline badge-sm">{p}</div>)}
+                                            </div>
+                                            <div className="font-semibold text-xs mt-2">Area KPI:</div>
+                                            <div className="flex flex-wrap gap-1 max-w-xs">
+                                                {training.training_area_link.map(l => <div key={l.area_name} className="badge badge-ghost badge-sm">{l.area_name}</div>)}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="text-xs align-top">
+                                        <div>Mulai: {formatDate(training.tanggal_mulai)}</div>
+                                        <div>Selesai: {formatDate(training.tanggal_berakhir)}</div>
+                                    </td>
+                                    <td className="align-top">
                                         {training.biaya === 'Berbayar' 
                                             ? formatRupiah(training.biaya_nominal) 
                                             : 'Gratis'
                                         }
                                     </td>
-                                    <td>
-                                        {training.link_akses && <a href={training.link_akses} target="_blank" rel="noopener noreferrer" className="btn btn-xs btn-outline">Link</a>}
-                                    </td>
-                                    <td className="text-right space-x-2">
+                                    <td className="align-top"><div className="badge badge-neutral badge-sm font-semibold">{training.status}</div></td>
+                                    <td className="text-right align-top space-x-2">
                                         {training.status === 'Menunggu Persetujuan' ? (
                                             <>
                                                 <button onClick={() => handleAction(approveTraining, training.id, 'MENYETUJUI')} className="btn btn-xs btn-success">Setujui</button>
                                                 <button onClick={() => handleAction(rejectTraining, training.id, 'MENOLAK')} className="btn btn-xs btn-error">Tolak</button>
                                             </>
                                         ) : (
-                                            <button onClick={() => handleOpenModal(training)} className="btn btn-xs">Edit</button>
+                                            <>
+                                                <button onClick={() => handleOpenModal(training)} className="btn btn-xs">Edit</button>
+                                                {/* --- TOMBOL HAPUS BARU --- */}
+                                                <button onClick={() => handleDelete(training)} className="btn btn-xs btn-error btn-outline">Hapus</button>
+                                            </> 
                                         )}
                                     </td>
                                 </tr>
