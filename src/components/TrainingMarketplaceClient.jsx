@@ -45,7 +45,7 @@ function TrainingCard({ training }) {
                 <h2 className="card-title text-md font-bold text-[#033f3f] leading-snug pr-16">
                     {training.nama_program}
                 </h2>
-                <p className="text-sm text-gray-500">Oleh: {training.penyedia || '-'}</p>
+                <p className="text-sm text-gray-500">Penyedia: {training.penyedia || '-'}</p>
                 <p className="text-xs text-gray-500 mb-2">Topik: {training.topik_utama || '-'}</p>
 
                 <div className="divider my-1"></div>
@@ -54,6 +54,19 @@ function TrainingCard({ training }) {
                 <div className="text-xs space-y-2 text-gray-600">
                     <p><span className="font-semibold">Jadwal:</span> {formatDate(training.tanggal_mulai)} - {formatDate(training.tanggal_berakhir)}</p>
                     <p><span className="font-semibold">Biaya:</span> {training.biaya === 'Berbayar' ? formatRupiah(training.biaya_nominal) : 'Gratis'}</p>
+                </div>
+
+                <div className="mt-3">
+                    <h3 className="text-xs font-bold uppercase text-gray-400 mb-2">Area KPI Terkait</h3>
+                    <div className="flex flex-wrap gap-1">
+                        {training.training_area_link && training.training_area_link.length > 0 ? (
+                            training.training_area_link.map(link => (
+                                <div key={link.area_name} className="badge badge-ghost badge-sm">{link.area_name}</div>
+                            ))
+                        ) : (
+                            <div className="badge badge-ghost badge-sm">Umum</div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Posisi Terkait */}

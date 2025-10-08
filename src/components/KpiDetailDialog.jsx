@@ -1,19 +1,11 @@
-// app/components/KpiDetailDialog.jsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { fetchKpiDetailsForArea, fetchAreaNote, saveAreaNote } from '../app/actions';
 import Modal from './Modal';
 
-// Menerima userRole dari AreaDonutChart
-export default function KpiDetailDialog({ areaName, onClose, userRole }) {
-    const searchParams = useSearchParams();
-    // Ambil parameter dari URL, SAMA SEPERTI REFERENSI ANDA
-    const karyawanId = searchParams.get('karyawanId');
-    const bulan = searchParams.get('bulan');
-    const tahun = searchParams.get('tahun');
-
+// --- PERBAIKAN: Terima 'karyawanId' dan 'periode' dari props, hapus 'useSearchParams' ---
+export default function KpiDetailDialog({ areaName, onClose, userRole, karyawanId, periode }) {
     const [kpiDetails, setKpiDetails] = useState([]);
     const [note, setNote] = useState('');
     const [loading, setLoading] = useState(true);
@@ -22,10 +14,8 @@ export default function KpiDetailDialog({ areaName, onClose, userRole }) {
     const isAdmin = userRole?.toLowerCase() === 'admin';
 
     useEffect(() => {
-        // Logika ini sekarang akan berfungsi di halaman admin
-        if (karyawanId && bulan && tahun && areaName) {
-            const periode = `${new Date(0, bulan - 1).toLocaleString('id-ID', { month: 'long' })} ${tahun}`;
-            
+        // Logika sekarang bergantung pada props, bukan URL
+        if (karyawanId && periode && areaName) {
             const loadData = async () => {
                 setLoading(true);
                 const [detailsResult, noteResult] = await Promise.all([
@@ -33,22 +23,19 @@ export default function KpiDetailDialog({ areaName, onClose, userRole }) {
                     fetchAreaNote(karyawanId, periode, areaName)
                 ]);
 
-                // Menggunakan struktur balikan server action yang baru & aman
-                if (!detailsResult.error) setKpiDetails(detailsResult.data || []);
-                if (!noteResult.error) setNote(noteResult.note || '');
+                if (detailsResult && !detailsResult.error) setKpiDetails(detailsResult.data || []);
+                if (noteResult && !noteResult.error) setNote(noteResult.note || '');
                 
                 setLoading(false);
             };
             loadData();
         } else {
-            // Menangani kasus jika parameter URL tidak ada
             setLoading(false);
-            console.warn("Parameter URL (karyawanId, bulan, tahun) tidak lengkap.");
+            console.warn("Props (karyawanId, periode, areaName) tidak lengkap.");
         }
-    }, [karyawanId, bulan, tahun, areaName]);
+    }, [karyawanId, periode, areaName]); // <-- Dependency sekarang adalah props
 
     const handleSaveNote = async () => {
-        const periode = `${new Date(0, bulan - 1).toLocaleString('id-ID', { month: 'long' })} ${tahun}`;
         const result = await saveAreaNote(karyawanId, periode, areaName, note);
         if (result.success) {
             setMessage(result.success);
@@ -57,7 +44,7 @@ export default function KpiDetailDialog({ areaName, onClose, userRole }) {
     };
 
     return (
-        <Modal isOpen={true} onClose={onClose} title={`Detail Kinerja Area: ${areaName}`}>
+        <Modal isOpen={true} onClose={() => onClose(false)} title={`Detail Kinerja Area: ${areaName}`}>
             {loading ? (
                 <div className="text-center p-8"><span className="loading loading-spinner loading-lg"></span></div>
             ) : (
@@ -80,7 +67,7 @@ export default function KpiDetailDialog({ areaName, onClose, userRole }) {
                             onChange={(e) => setNote(e.target.value)}
                             rows="4"
                             className="textarea textarea-bordered w-full"
-                            placeholder={isAdmin ? "Tuliskan evaluasi..." : "Tidak ada catatan."}
+                            placeholder={isAdmin ? "Tuliskan evaluasi..." : "Tidak ada catatan dari penilai."}
                             readOnly={!isAdmin}
                         />
                     </div>

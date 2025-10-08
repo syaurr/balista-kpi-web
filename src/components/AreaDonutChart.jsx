@@ -9,7 +9,7 @@ import KpiDetailDialog from './KpiDetailDialog';
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 // Hanya perlu menerima userRole untuk hak akses simpan catatan
-export default function AreaDonutChart({ areaScores, userRole }) {
+export default function AreaDonutChart({ areaScores, userRole, karyawanId, periode }) {
     const [showModal, setShowModal] = useState(false);
     const [selectedArea, setSelectedArea] = useState(null);
 
@@ -82,7 +82,10 @@ export default function AreaDonutChart({ areaScores, userRole }) {
             {showModal && (
                 <KpiDetailDialog 
                     areaName={selectedArea}
-                    userRole={userRole} // Kirim userRole untuk hak akses edit
+                    userRole={userRole}
+                    // --- PERBAIKAN: Kirim prop ke komponen dialog ---
+                    karyawanId={karyawanId}
+                    periode={periode}
                     onClose={() => setShowModal(false)}
                 />
             )}

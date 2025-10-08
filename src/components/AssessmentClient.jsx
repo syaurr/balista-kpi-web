@@ -1,12 +1,16 @@
-// app/components/AssessmentClient.jsx
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { saveFullAssessment, addRecommendation, fetchAssessmentData, updateRecommendation, deleteRecommendation, fetchUserRole } from '../app/actions';
+import { saveFullAssessment, addRecommendation, updateRecommendation, deleteRecommendation } from '../app/actions';
 import ScoreCard from './ScoreCard';
 import Modal from './Modal';
-import AreaDonutChart from './AreaDonutChart';
+import dynamic from 'next/dynamic';
+
+const AreaDonutChart = dynamic(() => import('./AreaDonutChart'), {
+    ssr: false,
+    loading: () => <p className="text-center p-16 font-bold">Memuat chart...</p>
+});
 
 function LinkModal({ kpi, onClose }) {
     if (!kpi || !kpi.kpi_links || kpi.kpi_links.length === 0) return null;
@@ -33,25 +37,13 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    const [userRole, setUserRole] = useState(null);
-
-    useEffect(() => {
-        // Ambil role user yang sedang login di sisi klien
-        const getUserRole = async () => {
-            const role = await fetchUserRole();
-            setUserRole(role);
-        };
-        getUserRole();
-    }, []);
-
     const selectedEmployeeId = searchParams.get('karyawanId') || '';
-    const currentMonth = searchParams.get('bulan') || (new Date().getMonth() + 1).toString().padStart(2, '0');
+    const currentMonth = searchParams.get('bulan') || (new Date().getMonth() + 1).toString();
     const currentYear = searchParams.get('tahun') || new Date().getFullYear().toString();
     
-    // PERBAIKAN: Definisikan 'periode' di scope utama agar bisa diakses semua fungsi
     const periode = useMemo(() => {
         if (!selectedEmployeeId) return null;
-        const monthName = new Date(0, currentMonth - 1).toLocaleString('id-ID', { month: 'long' });
+        const monthName = new Date(0, parseInt(currentMonth, 10) - 1).toLocaleString('id-ID', { month: 'long' });
         return `${monthName} ${currentYear}`;
     }, [currentMonth, currentYear, selectedEmployeeId]);
 
@@ -59,13 +51,13 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const [monthInput, setMonthInput] = useState(currentMonth);
     const [yearInput, setYearInput] = useState(currentYear);
 
-    const { kpis, scores, generalNote, recommendations, areaScores: initialAreaScores } = initialAssessmentData || { 
-        kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [] 
+    const { kpis, scores, generalNote, recommendations } = initialAssessmentData || { 
+        kpis: [], scores: {}, generalNote: '', recommendations: [] 
     };
     
     const [currentScores, setCurrentScores] = useState(scores);
     const [currentGeneralNote, setCurrentGeneralNote] = useState(generalNote);
-    const [currentRecommendations, setCurrentRecommendations] = useState(recommendations); // State baru untuk rekomendasi
+    const [currentRecommendations, setCurrentRecommendations] = useState(recommendations);
     const [editingRecommendation, setEditingRecommendation] = useState(null);
     const [newRecommendation, setNewRecommendation] = useState('');
     const [loading, setLoading] = useState(false);
@@ -73,15 +65,13 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const [linkModalKpi, setLinkModalKpi] = useState(null);
 
     const handleSelectionChange = () => {
-        const params = new URLSearchParams();
-        if (employeeInput) params.set('karyawanId', employeeInput);
-        if (monthInput) params.set('bulan', monthInput);
-        if (yearInput) params.set('tahun', yearInput);
-
-        // GANTI router.push dengan window.location.href untuk memaksa FULL REFRESH
-        window.location.href = `/dashboard/admin/assessment?${params.toString()}`;
+        const params = new URLSearchParams(searchParams);
+        params.set('karyawanId', employeeInput);
+        params.set('bulan', monthInput);
+        params.set('tahun', yearInput);
+        router.push(`/dashboard/admin/assessment?${params.toString()}`);
     };
-
+    
     const { totalNilaiAkhir, nilaiProporsional, areaScores } = useMemo(() => {
         if (!kpis || kpis.length === 0) {
             return { totalNilaiAkhir: 0, nilaiProporsional: 0, areaScores: [] };
@@ -105,7 +95,7 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
             
             // 3. Logika untuk chart juga HANYA dari KPI yang skornya > 0
             if (score > 0) {
-                const areaName = kpi.area_kerja || 'Lain-lain';
+                const areaName = kpi.area || 'Lain-lain';
                 if (!areaData[areaName]) {
                     areaData[areaName] = { totalScore: 0, count: 0 };
                 }
@@ -250,44 +240,30 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                 </div>
             </div>
 
-            {initialAssessmentData && (
+            {selectedEmployeeId && initialAssessmentData && (
                 <>
                     <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Card untuk Total Nilai Akhir Bulanan */}
-                        <div className="bg-white p-6 rounded-xl shadow-md text-center">
-                            <h3 className="text-base font-medium text-gray-500">Total Nilai Akhir Bulanan</h3>
-                            <p className="text-2xl font-bold text-[#022020] mt-2">
-                                {parseFloat(totalNilaiAkhir || 0).toFixed(2)}
-                            </p>
-                        </div>
-                        
-                        {/* Card untuk Nilai Akhir Proporsional */}
-                        <div className="bg-white p-6 rounded-xl shadow-md text-center">
-                            <h3 className="text-base font-medium text-gray-500">Nilai Akhir Proporsional</h3>
-                            <p className="text-4xl font-bold text-[#6b1815] mt-2">
-                                {parseFloat(nilaiProporsional || 0).toFixed(2)}
-                            </p>
-                        </div>
+                        <ScoreCard title="Total Nilai Akhir Bulanan" value={totalNilaiAkhir} />
+                        <ScoreCard title="Nilai Akhir Proporsional" value={nilaiProporsional} prominent={true} />
                     </section>
                                         
                     <div className="bg-white p-6 rounded-xl shadow-md">
                         <label className="block text-sm font-bold text-gray-700 mb-2">Catatan Umum Penilaian KPI (Bulanan)</label>
-                        <textarea value={currentGeneralNote} onChange={(e) => setCurrentGeneralNote(e.target.value)} rows="3" className="textarea textarea-bordered w-full" placeholder="Tuliskan catatan umum untuk penilaian periode ini..."/>
+                        <textarea value={currentGeneralNote} onChange={(e) => setCurrentGeneralNote(e.target.value)} rows="3" className="textarea textarea-bordered w-full"/>
                     </div>
-                    <div className="bg-white p-6 rounded-xl shadow-md">
-                        {/* Kita buat judulnya manual dengan tag h2 */}
-                        <h2 className="text-xl font-bold text-[#6b1815] mb-4">
-                            Detail Kinerja per Area & Rekomendasi
-                        </h2>
-                        
-                        <div className="space-y-8">
 
-                           <div className="h-96 w-full">
-                                {/* --- KIRIM userRole KE AreaDonutChart --- */}
+                    <details className="collapse collapse-arrow bg-white shadow-md rounded-xl" open>
+                        <summary className="collapse-title text-xl font-bold text-[#6b1815]">Detail Kinerja per Area & Rekomendasi</summary>
+                        <div className="collapse-content space-y-8 p-4">
+                            <div className="h-96 w-full">
+                                {/* --- AWAL PERBAIKAN: Kirim prop yang dibutuhkan --- */}
                                 <AreaDonutChart 
-                                    areaScores={chartAreaScores} 
-                                    userRole={userRole} 
+                                    areaScores={areaScores} 
+                                    userRole="Admin" // <-- Admin bisa edit
+                                    karyawanId={selectedEmployeeId} // <-- Kirim ID karyawan yang dipilih
+                                    periode={periode} // <-- Kirim periode yang aktif
                                 />
+                                {/* --- AKHIR PERBAIKAN --- */}
                             </div>
 
                             {/* Bagian Rekomendasi */}
@@ -325,7 +301,7 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </details>
                     
                     <div className="bg-white p-6 rounded-xl shadow-md">
                         <h3 className="text-lg font-bold text-[#6b1815] mb-4">Input Skor KPI</h3>

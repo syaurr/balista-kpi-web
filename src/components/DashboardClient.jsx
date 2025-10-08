@@ -122,9 +122,12 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
             <section className="bg-white p-6 rounded-xl shadow-md mb-8">
                 <h3 className="text-lg font-bold text-[#6b1815] mb-4">Kinerja per Area</h3>
                 <div className="h-96 w-full">
+                    {/* --- PERBAIKAN: Kirim prop ke komponen chart --- */}
                     <AreaDonutChart 
                         areaScores={areaScores} 
                         userRole={user.role}
+                        karyawanId={karyawanId}
+                        periode={periode}
                     />
                 </div>
             </section>
