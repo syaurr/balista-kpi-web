@@ -184,11 +184,11 @@ export default function TrainingManagementClient({ initialTrainings, allPosition
                         <thead>
                            <tr>
                                 {/* --- AWAL PERBAIKAN LEBAR KOLOM --- */}
-                                <th className="w-2/5">Program / Penyedia</th>
-                                <th className="w-1/4">Posisi & Area Terkait</th>
+                                <th className="w-1/2">Nama & Detail Program</th>
+                                <th className="w-1/5">Posisi & Area Terkait</th>
                                 <th className="w-1/6">Jadwal</th>
-                                <th>Biaya</th>
-                                <th>Status</th>
+                                <th className="w-1/7">Biaya</th>
+                                <th className="w-1/3">Status</th>
                                 <th className="text-right">Aksi</th>
                                 {/* --- AKHIR PERBAIKAN LEBAR KOLOM --- */}
                             </tr>
@@ -198,7 +198,7 @@ export default function TrainingManagementClient({ initialTrainings, allPosition
                                 <tr key={training.id}>
                                     <td className="align-top">
                                         <div className="font-bold whitespace-normal">{training.nama_program}</div>
-                                        <div className="text-xs opacity-70">Oleh: {training.penyedia || '-'}</div>
+                                        <div className="text-xs opacity-70">Penyedia: {training.penyedia || '-'}</div>
                                         <div className="text-xs opacity-70">Topik: {training.topik_utama || '-'}</div>
                                         {training.link_akses && <a href={training.link_akses} target="_blank" rel="noopener noreferrer" className="btn btn-xs btn-outline mt-2">Link Info</a>}
                                     </td>
@@ -209,7 +209,7 @@ export default function TrainingManagementClient({ initialTrainings, allPosition
                                                 <div className="flex flex-wrap gap-1 mt-1">
                                                     {/* --- AWAL PERBAIKAN GAYA BADGE --- */}
                                                     {training.posisi?.map(p => 
-                                                        <div key={p} className="badge badge-outline h-auto p-1" style={{ whiteSpace: 'normal' }}>{p}</div>
+                                                        <div key={p} className="badge badge-outline h-auto p-1 text-xs" style={{ whiteSpace: 'normal' }}>{p}</div>
                                                     )}
                                                 </div>
                                             </div>
@@ -217,7 +217,7 @@ export default function TrainingManagementClient({ initialTrainings, allPosition
                                                 <div className="font-semibold text-xs mt-2">Area KPI:</div>
                                                 <div className="flex flex-wrap gap-1 mt-1">
                                                     {training.training_area_link.map(l => 
-                                                        <div key={l.area_name} className="badge badge-ghost h-auto p-1" style={{ whiteSpace: 'normal' }}>{l.area_name}</div>
+                                                        <div key={l.area_name} className="badge badge-ghost h-auto p-1 text-xs" style={{ whiteSpace: 'normal' }}>{l.area_name}</div>
                                                     )}
                                                 </div>
                                             </div>
@@ -235,7 +235,7 @@ export default function TrainingManagementClient({ initialTrainings, allPosition
                                     </td>
                                     <td className="align-top">
                                         <div 
-                                            className="badge badge-neutral font-semibold h-auto text-xs p-2" 
+                                            className="badge badge-neutral font-semibold h-auto text-xs p-1" 
                                             style={{ whiteSpace: 'normal' }}
                                         >
                                             {training.status}
