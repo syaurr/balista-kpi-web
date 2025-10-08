@@ -1,18 +1,20 @@
 'use client';
 
 import { useState } from 'react';
+// --- PERBAIKAN: Import Server Action secara langsung ---
+import { generateTrainingRecommendations } from '../../../actions';
 
-export default function ClientPage({ action }) {
+export default function ClientPage() { // <-- Hapus prop 'action' dari sini
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
-    const [details, setDetails] = useState([]); // <-- State baru untuk menampung detail
+    const [details, setDetails] = useState([]);
     const [month, setMonth] = useState((new Date().getMonth() + 1).toString());
     const [year, setYear] = useState(new Date().getFullYear().toString());
 
     const handleGenerate = async () => {
         setLoading(true);
         setMessage(null);
-        setDetails([]); // <-- Reset detail setiap kali dijalankan
+        setDetails([]);
 
         const monthName = new Date(0, parseInt(month, 10) - 1).toLocaleString('id-ID', { month: 'long' });
         const periode = `${monthName} ${year}`;
@@ -20,14 +22,16 @@ export default function ClientPage({ action }) {
         const confirm = window.confirm(`Anda akan membuat rekomendasi training untuk semua karyawan berdasarkan kinerja periode "${periode}". Proses ini tidak dapat dibatalkan. Lanjutkan?`);
         
         if (confirm) {
-            const result = await action(periode);
+            // --- PERBAIKAN: Panggil fungsi yang sudah di-import ---
+            const result = await generateTrainingRecommendations(periode);
             if (result.error) {
                 setMessage({ type: 'error', text: result.error });
             } else {
                 setMessage({ type: 'success', text: result.success });
-                if (result.details) setDetails(result.details); // <-- Simpan detail ke state
+                if (result.details) setDetails(result.details);
             }
         }
+        
         setLoading(false);
     };
 
@@ -58,10 +62,9 @@ export default function ClientPage({ action }) {
                     {message.text}
                 </div>
             )}
-
-            {/* --- TAMPILAN DETAIL BARU --- */}
+            
             {details.length > 0 && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                     <h4 className="font-bold mb-2">Detail Rekomendasi yang Dibuat:</h4>
                     <ul className="list-disc list-inside text-sm space-y-1 max-h-48 overflow-y-auto">
                         {details.map((detail, index) => <li key={index}>{detail}</li>)}

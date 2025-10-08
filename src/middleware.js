@@ -1,6 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
-import { updateSession } from './utils/supabase/middleware'
 
 export async function middleware(request) {
   let response = NextResponse.next({
@@ -19,36 +18,24 @@ export async function middleware(request) {
         },
         set(name, value, options) {
           request.cookies.set({ name, value, ...options })
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          })
+          response = NextResponse.next({ request: { headers: request.headers }})
           response.cookies.set({ name, value, ...options })
         },
         remove(name, options) {
           request.cookies.set({ name, value: '', ...options })
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          })
+          response = NextResponse.next({ request: { headers: request.headers }})
           response.cookies.set({ name, value: '', ...options })
         },
       },
     }
   )
 
-  // Refresh session if expired - required for Server Components
   await supabase.auth.getUser()
-
   return response
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }

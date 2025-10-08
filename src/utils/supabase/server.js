@@ -1,5 +1,3 @@
-// utils/supabase/server.js
-
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
@@ -18,16 +16,14 @@ export function createClient() {
           try {
             cookieStore.set({ name, value, ...options })
           } catch (error) {
-            // The `set` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing user sessions.
+            // Abaikan error jika terjadi di Server Action
           }
         },
         remove(name, options) {
           try {
             cookieStore.set({ name, value: '', ...options })
           } catch (error) {
-            // The `delete` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing user sessions.
+            // Abaikan error jika terjadi di Server Action
           }
         },
       },

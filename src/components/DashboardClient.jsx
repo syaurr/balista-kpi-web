@@ -6,6 +6,62 @@ import Link from 'next/link';
 import ScoreCard from './ScoreCard';
 import AreaDonutChart from './AreaDonutChart';
 import { updateTrainingPlanStatus } from '../app/actions';
+import Modal from './Modal'; // <-- Import komponen Modal
+
+function RecommendedTrainingModal({ plan, onClose, onStart, loading }) {
+    // Ambil detail program dari data yang sudah ada
+    const training = plan.training_programs;
+
+    // Fungsi helper untuk format tanggal dan Rupiah
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        return new Date(dateString).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+    };
+    const formatRupiah = (number) => {
+        if (number === null || number === undefined) return '-';
+        return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title="Detail Program Training">
+            <div className="space-y-4">
+                {/* Judul & Penyedia */}
+                <h2 className="text-xl font-bold text-[#033f3f]">{training.nama_program}</h2>
+                <p className="text-sm text-gray-500">Oleh: {training.penyedia || '-'}</p>
+                <p className="text-xs text-gray-500 -mt-2">Topik: {training.topik_utama || '-'}</p>
+
+                <div className="divider my-2"></div>
+
+                {/* Detail Jadwal & Biaya */}
+                <div className="text-sm space-y-2 text-gray-600">
+                    <p><span className="font-semibold">Jadwal:</span> {formatDate(training.tanggal_mulai)} - {formatDate(training.tanggal_berakhir)}</p>
+                    <p><span className="font-semibold">Biaya:</span> {training.biaya === 'Berbayar' ? formatRupiah(training.biaya_nominal) : 'Gratis'}</p>
+                </div>
+
+                {/* Posisi Terkait */}
+                <div className="mt-3">
+                    <h3 className="text-xs font-bold uppercase text-gray-400 mb-2">Untuk Posisi:</h3>
+                    <div className="flex flex-wrap gap-1">
+                        {training.posisi && training.posisi.length > 0
+                            ? training.posisi.map(p => <div key={p} className="badge badge-outline badge-sm">{p}</div>)
+                            : <div className="badge badge-ghost badge-sm">Semua Posisi</div>
+                        }
+                    </div>
+                </div>
+
+                {/* Tombol Aksi di dalam Modal */}
+                <div className="card-actions justify-between items-center pt-6">
+                    {training.link_akses ? (
+                        <a href={training.link_akses} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-ghost text-blue-600">Link Info</a>
+                    ) : <div></div>}
+                    <button onClick={onStart} disabled={loading} className="btn btn-success text-white shadow-md">
+                        {loading ? 'Memproses...' : 'Ya, Mulai Training Ini'}
+                    </button>
+                </div>
+            </div>
+        </Modal>
+    );
+}
 
 export default function DashboardClient({ user, initialData, initialMonth, initialYear, karyawanId, periode }) {
     const router = useRouter();
@@ -14,6 +70,7 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
     const [month, setMonth] = useState(initialMonth);
     const [year, setYear] = useState(initialYear);
     const [loading, setLoading] = useState(false);
+    const [selectedTrainingDetail, setSelectedTrainingDetail] = useState(null); // <-- State baru untuk modal
 
     const handlePeriodChange = () => {
         router.push(`/dashboard?bulan=${month}&tahun=${year}`);
@@ -84,22 +141,20 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
                         <div>
                             <p className="text-gray-600 mb-4">Berdasarkan kinerjamu periode lalu, sistem merekomendasikan training berikut untukmu:</p>
                             <div className="space-y-3">
-                                {/* --- AWAL PERBAIKAN: Ganti nama variabel 'rec' menjadi 'plan' --- */}
                                 {recommendedTrainings.map(plan => (
                                     <div key={plan.id} className="p-3 bg-teal-50 rounded-lg flex justify-between items-center">
                                         <span className="font-semibold text-teal-800">
                                             {plan.training_programs.nama_program}
                                         </span>
+                                        {/* --- PERBAIKAN TOMBOL AKSI --- */}
                                         <button 
-                                            onClick={() => handleStartTraining(plan.id)}
-                                            disabled={loading}
-                                            className="btn btn-sm btn-success"
+                                            onClick={() => setSelectedTrainingDetail(plan)}
+                                            className="btn btn-sm btn-outline btn-primary"
                                         >
-                                            {loading ? '...' : 'Mulai Training'}
+                                            Lihat Detail Program
                                         </button>
                                     </div>
                                 ))}
-                                {/* --- AKHIR PERBAIKAN --- */}
                             </div>
                         </div>
                     ) : (
@@ -176,6 +231,17 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
                 </div>
             </section>
             
+        {selectedTrainingDetail && (
+                <RecommendedTrainingModal
+                    plan={selectedTrainingDetail}
+                    loading={loading}
+                    onClose={() => setSelectedTrainingDetail(null)}
+                    onStart={() => {
+                        handleStartTraining(selectedTrainingDetail.id);
+                        setSelectedTrainingDetail(null); // Tutup modal setelah aksi
+                    }}
+                />
+            )}
         </div>
     );
 }

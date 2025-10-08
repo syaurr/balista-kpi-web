@@ -7,10 +7,7 @@ import ScoreCard from './ScoreCard';
 import Modal from './Modal';
 import dynamic from 'next/dynamic';
 
-const AreaDonutChart = dynamic(() => import('./AreaDonutChart'), {
-    ssr: false,
-    loading: () => <p className="text-center p-16 font-bold">Memuat chart...</p>
-});
+const AreaDonutChart = dynamic(() => import('./AreaDonutChart'), { ssr: false, loading: () => <p>Memuat chart...</p> });
 
 function LinkModal({ kpi, onClose }) {
     if (!kpi || !kpi.kpi_links || kpi.kpi_links.length === 0) return null;
@@ -37,35 +34,40 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    const selectedEmployeeId = searchParams.get('karyawanId') || '';
-    const currentMonth = searchParams.get('bulan') || (new Date().getMonth() + 1).toString();
-    const currentYear = searchParams.get('tahun') || new Date().getFullYear().toString();
+    // --- ARSITEKTUR BARU ---
+    // 1. Baca parameter URL untuk mengontrol TAMPILAN form filter
+    const employeeIdFromUrl = searchParams.get('karyawanId') || '';
+    const monthFromUrl = searchParams.get('bulan') || (new Date().getMonth() + 1).toString().padStart(2, '0');
+    const yearFromUrl = searchParams.get('tahun') || new Date().getFullYear().toString();
     
-    const periode = useMemo(() => {
-        if (!selectedEmployeeId) return null;
-        const monthName = new Date(0, parseInt(currentMonth, 10) - 1).toLocaleString('id-ID', { month: 'long' });
-        return `${monthName} ${currentYear}`;
-    }, [currentMonth, currentYear, selectedEmployeeId]);
+    // 2. State HANYA untuk input form filter
+    const [employeeInput, setEmployeeInput] = useState(employeeIdFromUrl);
+    const [monthInput, setMonthInput] = useState(monthFromUrl);
+    const [yearInput, setYearInput] = useState(yearFromUrl);
 
-    const [employeeInput, setEmployeeInput] = useState(selectedEmployeeId);
-    const [monthInput, setMonthInput] = useState(currentMonth);
-    const [yearInput, setYearInput] = useState(currentYear);
-
-    const { kpis, scores, generalNote, recommendations } = initialAssessmentData || { 
-        kpis: [], scores: {}, generalNote: '', recommendations: [] 
-    };
+    // 3. Semua data inti (kpis, scores, dll.) datang dari props, BUKAN dari state
+    const { kpis, scores, generalNote, recommendations, areaScores: initialAreaScores } = initialAssessmentData || {};
     
-    const [currentScores, setCurrentScores] = useState(scores);
-    const [currentGeneralNote, setCurrentGeneralNote] = useState(generalNote);
-    const [currentRecommendations, setCurrentRecommendations] = useState(recommendations);
+    // 4. State HANYA untuk data yang bisa diedit oleh user di halaman ini
+    const [currentScores, setCurrentScores] = useState(scores || {});
+    const [currentGeneralNote, setCurrentGeneralNote] = useState(generalNote || '');
+    const [currentRecommendations, setCurrentRecommendations] = useState(recommendations || []);
+    
+    // ... (State lain seperti loading, message, modal tidak berubah)
     const [editingRecommendation, setEditingRecommendation] = useState(null);
     const [newRecommendation, setNewRecommendation] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
     const [linkModalKpi, setLinkModalKpi] = useState(null);
 
+    const periode = useMemo(() => {
+        if (!employeeIdFromUrl) return null;
+        return `${new Date(0, parseInt(monthFromUrl, 10) - 1).toLocaleString('id-ID', { month: 'long' })} ${yearFromUrl}`;
+    }, [monthFromUrl, yearFromUrl, employeeIdFromUrl]);
+
+    // Fungsi ini HANYA mengubah URL, membiarkan server mengambil data baru
     const handleSelectionChange = () => {
-        const params = new URLSearchParams(searchParams);
+        const params = new URLSearchParams();
         params.set('karyawanId', employeeInput);
         params.set('bulan', monthInput);
         params.set('tahun', yearInput);
@@ -240,15 +242,16 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                 </div>
             </div>
 
-            {selectedEmployeeId && initialAssessmentData && (
+           {initialAssessmentData ? (
                 <>
+                    {/* Tampilkan semua data dari state yang sudah diinisialisasi */}
                     <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <ScoreCard title="Total Nilai Akhir Bulanan" value={totalNilaiAkhir} />
                         <ScoreCard title="Nilai Akhir Proporsional" value={nilaiProporsional} prominent={true} />
                     </section>
                                         
                     <div className="bg-white p-6 rounded-xl shadow-md">
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Catatan Umum Penilaian KPI (Bulanan)</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">Catatan Umum</label>
                         <textarea value={currentGeneralNote} onChange={(e) => setCurrentGeneralNote(e.target.value)} rows="3" className="textarea textarea-bordered w-full"/>
                     </div>
 
@@ -256,44 +259,40 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                         <summary className="collapse-title text-xl font-bold text-[#6b1815]">Detail Kinerja per Area & Rekomendasi</summary>
                         <div className="collapse-content space-y-8 p-4">
                             <div className="h-96 w-full">
-                                {/* --- AWAL PERBAIKAN: Kirim prop yang dibutuhkan --- */}
                                 <AreaDonutChart 
                                     areaScores={areaScores} 
-                                    userRole="Admin" // <-- Admin bisa edit
-                                    karyawanId={selectedEmployeeId} // <-- Kirim ID karyawan yang dipilih
-                                    periode={periode} // <-- Kirim periode yang aktif
+                                    userRole="Admin"
+                                    karyawanId={employeeIdFromUrl}
+                                    periode={periode}
                                 />
-                                {/* --- AKHIR PERBAIKAN --- */}
                             </div>
-
-                            {/* Bagian Rekomendasi */}
                             <div className="p-4 border-t">
                                 <h3 className="font-bold text-lg mb-2">Rekomendasi</h3>
                                 <div className="max-h-40 overflow-y-auto mb-4">
                                     <table className="table table-xs">
-                                    <thead>
-                                        <tr>
-                                            <th>No.</th>
-                                            <th>Deskripsi Rekomendasi</th>
-                                            <th className="text-right">Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {currentRecommendations.map((rec, index) => (
-                                            <tr key={rec.id || index}>
-                                                <th className="text-center">{index + 1}</th>
-                                                <td>{rec.rekomendasi_text}</td>
-                                                <td className="text-right space-x-2">
-                                                    <button onClick={() => setEditingRecommendation(rec)} className="btn btn-xs btn-outline">Edit</button>
-                                                    <button onClick={() => handleDeleteRecommendation(rec)} className="btn btn-xs btn-ghost text-red-600">Hapus</button>
-                                                </td>
+                                        <thead>
+                                            <tr>
+                                                <th>No.</th>
+                                                <th>Deskripsi Rekomendasi</th>
+                                                <th className="text-right">Aksi</th>
                                             </tr>
-                                        ))}
-                                        {currentRecommendations.length === 0 && (
-                                            <tr><td colSpan="3" className="text-center italic">Belum ada rekomendasi.</td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            {currentRecommendations.map((rec, index) => (
+                                                <tr key={rec.id || index}>
+                                                    <th className="text-center">{index + 1}</th>
+                                                    <td>{rec.rekomendasi_text}</td>
+                                                    <td className="text-right space-x-2">
+                                                        <button onClick={() => setEditingRecommendation(rec)} className="btn btn-xs btn-outline">Edit</button>
+                                                        <button onClick={() => handleDeleteRecommendation(rec)} className="btn btn-xs btn-ghost text-red-600">Hapus</button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {currentRecommendations.length === 0 && (
+                                                <tr><td colSpan="3" className="text-center italic">Belum ada rekomendasi.</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
                                 <div className="flex space-x-2">
                                     <input type="text" value={newRecommendation} onChange={e => setNewRecommendation(e.target.value)} className="input input-bordered w-full" placeholder="Tambah rekomendasi baru..."/>
@@ -306,7 +305,7 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                     <div className="bg-white p-6 rounded-xl shadow-md">
                         <h3 className="text-lg font-bold text-[#6b1815] mb-4">Input Skor KPI</h3>
                         <div className="space-y-4">
-                            {sortedKpis.map((kpi, index) => (
+                            {kpis.map((kpi, index) => (
                                 <div key={kpi.id} className="p-4 border rounded-lg flex flex-col md:flex-row items-center justify-between gap-4">
                                     <div className="flex-grow w-full">
                                         <label className="font-bold">{index + 1}. {kpi.kpi_deskripsi}</label>
@@ -334,6 +333,10 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                         {message && <div className={`mt-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{message.text}</div>}
                     </div>
                 </>
+            ) : (
+                <div className="text-center bg-white p-8 rounded-xl shadow-md">
+                    <p className="font-semibold">Pilih karyawan dan periode di atas, lalu klik "Tampilkan Data" untuk memulai.</p>
+                </div>
             )}
             
             {linkModalKpi && <LinkModal kpi={linkModalKpi} onClose={() => setLinkModalKpi(null)} />}
@@ -344,11 +347,11 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                     title="Edit Rekomendasi"
                 >
                     <form action={async (formData) => {
+                        formData.append('id', editingRecommendation.id);
                         await updateRecommendation(formData);
                         setEditingRecommendation(null);
-                        fetchAllData();
+                        router.refresh(); // Refresh untuk memuat ulang data
                     }}>
-                        <input type="hidden" name="id" value={editingRecommendation.id} />
                         <textarea 
                             name="rekomendasi_text"
                             defaultValue={editingRecommendation.rekomendasi_text}
