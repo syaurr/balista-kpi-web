@@ -31,7 +31,7 @@ export default async function AdminTrainingPage() {
 
     return (
         <div>
-            <h1 className="text-3xl font-bold text-[#022020] mb-6">Admin: Kelola Program Training</h1>
+            <h1 className="text-3xl font-bold text-[#022020] mb-6">Admin Training Management</h1>
             <TrainingManagementClient 
                 initialTrainings={trainings}
                 allPositions={allPositions}

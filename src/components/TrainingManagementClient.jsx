@@ -180,36 +180,46 @@ export default function TrainingManagementClient({ initialTrainings, allPosition
                 </div>
 
                 <div className="overflow-x-auto">
-                    {/* --- AWAL PERBAIKAN: TABEL LENGKAP --- */}
                     <table className="table table-zebra w-full">
                         <thead>
-                            <tr>
-                                <th>Program / Penyedia</th>
-                                <th>Posisi & Area Terkait</th>
-                                <th>Jadwal</th>
+                           <tr>
+                                {/* --- AWAL PERBAIKAN LEBAR KOLOM --- */}
+                                <th className="w-2/5">Program / Penyedia</th>
+                                <th className="w-1/4">Posisi & Area Terkait</th>
+                                <th className="w-1/6">Jadwal</th>
                                 <th>Biaya</th>
                                 <th>Status</th>
                                 <th className="text-right">Aksi</th>
+                                {/* --- AKHIR PERBAIKAN LEBAR KOLOM --- */}
                             </tr>
                         </thead>
                         <tbody>
                             {trainingsToDisplay.map(training => (
                                 <tr key={training.id}>
                                     <td className="align-top">
-                                        <div className="font-bold">{training.nama_program}</div>
+                                        <div className="font-bold whitespace-normal">{training.nama_program}</div>
                                         <div className="text-xs opacity-70">Oleh: {training.penyedia || '-'}</div>
                                         <div className="text-xs opacity-70">Topik: {training.topik_utama || '-'}</div>
                                         {training.link_akses && <a href={training.link_akses} target="_blank" rel="noopener noreferrer" className="btn btn-xs btn-outline mt-2">Link Info</a>}
                                     </td>
                                     <td className="align-top">
-                                        <div className="flex flex-col gap-1">
-                                            <div className="font-semibold text-xs">Posisi:</div>
-                                            <div className="flex flex-wrap gap-1 max-w-xs">
-                                                {training.posisi?.map(p => <div key={p} className="badge badge-outline badge-sm">{p}</div>)}
+                                        <div className="flex flex-col gap-2">
+                                            <div>
+                                                <div className="font-semibold text-xs">Posisi:</div>
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {/* --- AWAL PERBAIKAN GAYA BADGE --- */}
+                                                    {training.posisi?.map(p => 
+                                                        <div key={p} className="badge badge-outline h-auto p-1" style={{ whiteSpace: 'normal' }}>{p}</div>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="font-semibold text-xs mt-2">Area KPI:</div>
-                                            <div className="flex flex-wrap gap-1 max-w-xs">
-                                                {training.training_area_link.map(l => <div key={l.area_name} className="badge badge-ghost badge-sm">{l.area_name}</div>)}
+                                            <div>
+                                                <div className="font-semibold text-xs mt-2">Area KPI:</div>
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {training.training_area_link.map(l => 
+                                                        <div key={l.area_name} className="badge badge-ghost h-auto p-1" style={{ whiteSpace: 'normal' }}>{l.area_name}</div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </td>
@@ -217,13 +227,20 @@ export default function TrainingManagementClient({ initialTrainings, allPosition
                                         <div>Mulai: {formatDate(training.tanggal_mulai)}</div>
                                         <div>Selesai: {formatDate(training.tanggal_berakhir)}</div>
                                     </td>
-                                    <td className="align-top">
+                                    <td className="align-top text-xs whitespace-normal">
                                         {training.biaya === 'Berbayar' 
                                             ? formatRupiah(training.biaya_nominal) 
                                             : 'Gratis'
                                         }
                                     </td>
-                                    <td className="align-top"><div className="badge badge-neutral badge-sm font-semibold">{training.status}</div></td>
+                                    <td className="align-top">
+                                        <div 
+                                            className="badge badge-neutral font-semibold h-auto text-xs p-2" 
+                                            style={{ whiteSpace: 'normal' }}
+                                        >
+                                            {training.status}
+                                        </div>
+                                    </td>
                                     <td className="text-right align-top space-x-2">
                                         {training.status === 'Menunggu Persetujuan' ? (
                                             <>
@@ -245,7 +262,6 @@ export default function TrainingManagementClient({ initialTrainings, allPosition
                             )}
                         </tbody>
                     </table>
-                    {/* --- AKHIR PERBAIKAN --- */}
                 </div>
             </div>
 

@@ -48,35 +48,28 @@ export async function addTrainingProgram(formData) {
     const role = karyawan.role;
     const biayaValue = formData.get('biaya');
     const isPaid = biayaValue === 'Berbayar';
-    
-    // --- AWAL DEBUGGING ---
-    console.log("===================================");
-    console.log("DEBUG: addTrainingProgram Dijalankan");
-    console.log(` -> Peran User: ${role}`);
-    console.log(` -> Nilai Biaya dari Form: ${biayaValue}`);
-    console.log(` -> Apakah Berbayar (isPaid): ${isPaid}`);
-    // --- AKHIR DEBUGGING ---
-    
-    const status = (role === 'User' && isPaid) ? 'Menunggu Persetujuan' : 'Akan Datang';
-    console.log(` -> Status Final yang Ditentukan: ${status}`);
-    console.log("===================================");
-    
     const periode = `${new Date().toLocaleString('id-ID', { month: 'long' })} ${new Date().getFullYear()}`;
+    
+    // --- PERBAIKAN: Logika status dan biaya yang lebih robust ---
+    const status = (role === 'User' && isPaid) ? 'Menunggu Persetujuan' : formData.get('status') || 'Akan Datang';
 
     const programData = {
         nama_program: formData.get('nama_program'),
         penyedia: formData.get('penyedia'),
+        topik_utama: formData.get('topik_utama'),
         link_akses: formData.get('link_akses'),
-        status: status, // Menggunakan status yang sudah ditentukan
+        status: status,
         biaya: biayaValue,
         biaya_nominal: isPaid ? parseInt(formData.get('biaya_nominal') || 0, 10) : null,
         created_by_role: role,
         posisi: formData.getAll('posisi') || null,
+        tanggal_mulai: formData.get('tanggal_mulai') || null,
+        tanggal_berakhir: formData.get('tanggal_berakhir') || null,
     };
 
     const { data: newProgram, error: programError } = await supabase.from('training_programs').insert(programData).select('id').single();
     if (programError) {
-        console.error("Add Program Error:", programError)
+        console.error("Add Program Error:", programError);
         return { error: 'Gagal menambah program.' };
     }
     
@@ -107,6 +100,47 @@ export async function addTrainingProgram(formData) {
     return { success: successMessage, shouldRedirect: role === 'User' && !isPaid };
 }
 
+
+export async function updateTrainingProgram(formData) {
+    const supabase = createClient(cookies());
+    const programId = formData.get('id');
+    const linked_areas = formData.getAll('linked_areas');
+
+    // --- PERBAIKAN: Logika biaya yang hilang ---
+    const biayaValue = formData.get('biaya');
+    const isPaid = biayaValue === 'Berbayar';
+
+    const updatedData = {
+        nama_program: formData.get('nama_program'),
+        penyedia: formData.get('penyedia'),
+        topik_utama: formData.get('topik_utama'),
+        link_akses: formData.get('link_akses'),
+        status: formData.get('status'),
+        biaya: biayaValue,
+        biaya_nominal: isPaid ? parseInt(formData.get('biaya_nominal') || 0, 10) : null, // <-- Field yang hilang ditambahkan di sini
+        tanggal_mulai: formData.get('tanggal_mulai') || null,
+        tanggal_berakhir: formData.get('tanggal_berakhir') || null,
+        posisi: formData.getAll('posisi')
+    };
+
+    const { error: updateError } = await supabase.from('training_programs').update(updatedData).eq('id', programId);
+    if (updateError) {
+        console.error('Update training error:', updateError);
+        return { error: 'Gagal memperbarui program.' };
+    }
+
+    await supabase.from('training_area_link').delete().eq('training_program_id', programId);
+
+    if (linked_areas && linked_areas.length > 0) {
+        const linksToInsert = linked_areas.map(areaName => ({ training_program_id: programId, area_name: areaName }));
+        const { error: insertError } = await supabase.from('training_area_link').insert(linksToInsert);
+        if (insertError) return { error: 'Gagal menyimpan link area baru.' };
+    }
+
+    revalidatePath('/dashboard/admin/training');
+    return { success: 'Program berhasil diperbarui!' };
+}
+
 // --- FUNGSI BARU UNTUK PERSETUJUAN OLEH ADMIN ---
 
 export async function approveTraining(trainingId) {
@@ -132,47 +166,6 @@ export async function rejectTraining(trainingId) {
     if (error) return { error: 'Gagal menolak training.' };
     revalidatePath('/dashboard/admin/training');
     return { success: 'Training berhasil ditolak.' };
-}
-
-export async function updateTrainingProgram(formData) {
-    const supabase = createClient(cookies());
-    const programId = formData.get('id');
-    const linked_areas = formData.getAll('linked_areas');
-
-    const updatedData = {
-        nama_program: formData.get('nama_program'),
-        penyedia: formData.get('penyedia'),
-        topik_utama: formData.get('topik_utama'),
-        link_akses: formData.get('link_akses'),
-        biaya: formData.get('biaya'),
-        status: formData.get('status'),
-        tanggal_mulai: formData.get('tanggal_mulai') || null,
-        tanggal_berakhir: formData.get('tanggal_berakhir') || null,
-        posisi: formData.getAll('posisi')
-    };
-
-    // 1. Perbarui data training utama
-    const { error: updateError } = await supabase.from('training_programs').update(updatedData).eq('id', programId);
-    if (updateError) {
-        console.error('Update training error:', updateError);
-        return { error: 'Gagal memperbarui program.' };
-    }
-
-    // 2. Perbarui hubungan di tabel training_area_link (Hapus yang lama, masukkan yang baru)
-    const { error: deleteError } = await supabase.from('training_area_link').delete().eq('training_program_id', programId);
-    if (deleteError) return { error: 'Gagal menghapus link area lama.' };
-
-    if (linked_areas && linked_areas.length > 0) {
-        const linksToInsert = linked_areas.map(areaName => ({
-            training_program_id: programId,
-            area_name: areaName
-        }));
-        const { error: insertError } = await supabase.from('training_area_link').insert(linksToInsert);
-        if (insertError) return { error: 'Gagal menyimpan link area baru.' };
-    }
-
-    revalidatePath('/dashboard/admin/training');
-    return { success: 'Program berhasil diperbarui!' };
 }
 
 export async function deleteTrainingProgram(formData) {
