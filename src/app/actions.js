@@ -47,6 +47,8 @@ export async function enrollInTraining(trainingId, periode) { // <-- Terima 'per
 
 // Di dalam file: src/app/actions.js
 
+// Di dalam file: src/app/actions.js
+
 export async function addTrainingProgram(formData) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -57,19 +59,9 @@ export async function addTrainingProgram(formData) {
     
     const role = karyawan.role;
     const isPaid = formData.get('biaya') === 'Berbayar';
-    const periode = `${new Date().toLocaleString('id-ID', { month: 'long' })} ${new Date().getFullYear()}`;
+    
+    // Status 'Akan Datang' berlaku untuk usulan gratis dari user, atau semua usulan dari admin
     const status = (role === 'User' && isPaid) ? 'Menunggu Persetujuan' : 'Akan Datang';
-
-    // --- AWAL PERBAIKAN LOGIKA POSISI ---
-    let posisiData = formData.getAll('posisi');
-
-    // Jika input 'posisi' dari form kosong (karena form sederhana tidak memilikinya),
-    // DAN pengguna yang login memiliki data posisi di profilnya,
-    // maka gunakan posisi pengguna tersebut sebagai default.
-    if (posisiData.length === 0 && karyawan.posisi) {
-        posisiData = [karyawan.posisi];
-    }
-    // --- AKHIR PERBAIKAN LOGIKA POSISI ---
 
     const programData = {
         nama_program: formData.get('nama_program'),
@@ -80,7 +72,7 @@ export async function addTrainingProgram(formData) {
         biaya: formData.get('biaya'),
         biaya_nominal: isPaid ? parseInt(formData.get('biaya_nominal') || 0, 10) : null,
         created_by_role: role,
-        posisi: posisiData, // Gunakan data posisi yang sudah diolah
+        posisi: role === 'User' ? (karyawan.posisi ? [karyawan.posisi] : null) : formData.getAll('posisi') || null,
         tanggal_mulai: formData.get('tanggal_mulai') || null,
         tanggal_berakhir: formData.get('tanggal_berakhir') || null,
     };
@@ -97,25 +89,17 @@ export async function addTrainingProgram(formData) {
         await supabase.from('training_area_link').insert(linksToInsert);
     }
 
-    if (role === 'User' && !isPaid) {
-        await supabase.from('karyawan_training_plan').insert({
-            karyawan_id: karyawan.id,
-            training_program_id: newProgram.id,
-            periode: periode,
-            status: 'Sedang Berjalan',
-            assigned_by: 'Inisiatif Sendiri'
-        });
-    }
-    
+    // --- PERBAIKAN: HAPUS BLOK PENDAFTARAN OTOMATIS ---
+    // if (role === 'User' && !isPaid) { ... } <-- Seluruh blok ini dihapus
+
     revalidatePath('/dashboard/training');
     revalidatePath('/dashboard/admin/training');
-    revalidatePath('/dashboard/learning-plan');
     
-    const successMessage = status === 'Menunggu Persetujuan'
+    const successMessage = status === 'Menunggu Persetujuun'
         ? 'Usulan training berbayar Anda berhasil dikirim dan menunggu persetujuan Admin!'
-        : 'Training berhasil ditambahkan!';
+        : 'Training baru berhasil ditambahkan ke Marketplace!'; // <-- Pesan sukses diubah
         
-    return { success: successMessage, shouldRedirect: role === 'User' && !isPaid };
+    return { success: successMessage, shouldRedirect: false }; // <-- Redirect selalu false
 }
 
 
