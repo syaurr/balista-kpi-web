@@ -14,14 +14,14 @@ export async function enrollInTraining(trainingId) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'Anda harus login.' };
 
-    // Ambil ID Karyawan yang benar dari tabel 'karyawan'
+    // PERBAIKAN: Ambil profil karyawan untuk mendapatkan ID yang benar
     const { data: karyawan } = await supabase.from('karyawan').select('id').eq('email', user.email).single();
     if (!karyawan) return { error: 'Profil karyawan tidak ditemukan.' };
 
     const periode = `${new Date().toLocaleString('id-ID', { month: 'long' })} ${new Date().getFullYear()}`;
 
     const { error } = await supabase.from('karyawan_training_plan').insert({
-        karyawan_id: karyawan.id, // Gunakan ID yang benar
+        karyawan_id: karyawan.id, // <-- Gunakan ID Karyawan yang benar
         training_program_id: trainingId,
         periode: periode,
         status: 'Sedang Berjalan',
@@ -46,16 +46,15 @@ export async function addTrainingProgram(formData) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'Anda harus login.' };
 
-    const { data: karyawan } = await supabase.from('karyawan').select('role, id').eq('email', user.email).single();
+    // PERBAIKAN: Ambil profil karyawan untuk mendapatkan ID, Peran, dan Posisi
+    const { data: karyawan } = await supabase.from('karyawan').select('id, role, posisi').eq('email', user.email).single();
     if (!karyawan) return { error: 'Profil karyawan tidak ditemukan.' };
     
     const role = karyawan.role;
-    const biayaValue = formData.get('biaya');
-    const isPaid = biayaValue === 'Berbayar';
-    const periode = `${new Date().toLocaleString('id-ID', { month: 'long' })} ${new Date().getFullYear()}`;
+    const isPaid = formData.get('biaya') === 'Berbayar';
     
-    // --- PERBAIKAN: Logika status dan biaya yang lebih robust ---
-    const status = (role === 'User' && isPaid) ? 'Menunggu Persetujuan' : formData.get('status') || 'Akan Datang';
+    const status = (role === 'User' && isPaid) ? 'Menunggu Persetujuan' : 'Akan Datang';
+    const periode = `${new Date().toLocaleString('id-ID', { month: 'long' })} ${new Date().getFullYear()}`;
 
     const programData = {
         nama_program: formData.get('nama_program'),
@@ -63,10 +62,11 @@ export async function addTrainingProgram(formData) {
         topik_utama: formData.get('topik_utama'),
         link_akses: formData.get('link_akses'),
         status: status,
-        biaya: biayaValue,
+        biaya: formData.get('biaya'),
         biaya_nominal: isPaid ? parseInt(formData.get('biaya_nominal') || 0, 10) : null,
         created_by_role: role,
-        posisi: formData.getAll('posisi') || null,
+        // PERBAIKAN: Otomatis isi posisi jika yang menginput adalah User
+        posisi: role === 'User' ? [karyawan.posisi] : formData.getAll('posisi') || null,
         tanggal_mulai: formData.get('tanggal_mulai') || null,
         tanggal_berakhir: formData.get('tanggal_berakhir') || null,
     };
@@ -83,9 +83,10 @@ export async function addTrainingProgram(formData) {
         await supabase.from('training_area_link').insert(linksToInsert);
     }
 
+    // Jika user yang mengusulkan & trainingnya gratis, langsung daftarkan dia
     if (role === 'User' && !isPaid) {
         await supabase.from('karyawan_training_plan').insert({
-            karyawan_id: karyawan.id,
+            karyawan_id: karyawan.id, // <-- Gunakan ID Karyawan yang benar
             training_program_id: newProgram.id,
             periode: periode,
             status: 'Sedang Berjalan',
