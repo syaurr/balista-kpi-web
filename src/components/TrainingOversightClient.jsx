@@ -53,10 +53,10 @@ export default function TrainingOversightClient({ initialPlans }) {
                 <table className="table table-zebra w-full">
                     <thead>
                         <tr>
-                            <th>Nama Karyawan</th>
-                            <th>Posisi</th>
-                            <th>Nama Training</th>
-                            <th>Periode</th>
+                            <th className="w-1/6">Nama Karyawan</th>
+                            <th className="w-1/6">Posisi</th>
+                            <th className="w-1/5">Nama Training</th>
+                            <th className="w-1/6">Periode</th>
                             <th>Status</th>
                             <th className="text-right">Aksi</th>
                         </tr>
@@ -68,12 +68,17 @@ export default function TrainingOversightClient({ initialPlans }) {
                                 <td>{plan.karyawan.posisi}</td>
                                 <td>{plan.training_programs.nama_program}</td>
                                 <td>{plan.periode}</td>
-                                <td>
-                                    <div className={`badge ${
-                                        plan.status === 'Selesai' ? 'badge-success' :
-                                        plan.status === 'Sedang Berjalan' ? 'badge-info' :
-                                        plan.status === 'Menunggu Verifikasi' ? 'badge-error' : 'badge-warning'
-                                    }`}>{plan.status}</div>
+                                <td className="align-middle">
+                                    <div 
+                                        className={`badge ${
+                                            plan.status === 'Selesai' ? 'badge-success' :
+                                            plan.status === 'Sedang Berjalan' ? 'badge-info' :
+                                            plan.status === 'Menunggu Verifikasi' ? 'badge-error' : 'badge-warning'
+                                        } h-auto text-wrap text-center max-w-32 p-1`}
+                                        style={{ whiteSpace: 'normal' }}
+                                    >
+                                        {plan.status}
+                                    </div>
                                 </td>
                                 <td className="text-right">
                                     {plan.status === 'Menunggu Verifikasi' && (
@@ -100,6 +105,7 @@ export default function TrainingOversightClient({ initialPlans }) {
                     onClose={() => setDetailPlan(null)} 
                     title={`Detail Plan: ${detailPlan.karyawan.nama}`}
                 >
+                
                     <div className="max-h-[70vh] overflow-y-auto">
                         <TrainingPlanItem plan={detailPlan} viewOnly={true} />
                     </div>
