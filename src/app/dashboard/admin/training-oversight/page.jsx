@@ -5,10 +5,23 @@ import TrainingOversightClient from '../../../../components/TrainingOversightCli
 async function getOversightData() {
     const supabase = createClient(cookies());
     
+    // --- PERBAIKAN QUERY: Sertakan pengambilan data 'training_progress_updates' ---
     const { data: plans, error } = await supabase
         .from('karyawan_training_plan')
-        .select(`id, periode, status, karyawan(nama, posisi), training_programs(nama_program)`)
-        // --- PERBAIKAN: Hanya ambil status yang aktif & perlu perhatian ---
+        .select(`
+            *,
+            karyawan (
+                nama,
+                posisi
+            ),
+            training_programs (
+                *
+            ),
+            training_progress_updates (
+                *,
+                created_at
+            )
+        `)
         .in('status', ['Disarankan', 'Sedang Berjalan', 'Menunggu Verifikasi', 'Selesai'])
         .order('created_at', { ascending: false });
 

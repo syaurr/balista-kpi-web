@@ -112,14 +112,16 @@ export default function TrainingPlanItem({ plan, viewOnly = false }) {
                             )) : <p className="text-sm italic text-gray-500 p-4">Belum ada progres yang dilaporkan.</p>}
                         </div>
                         
-                        <div className="pt-4 flex flex-col space-y-2">
-                            {plan.status === 'Disarankan' && (
-                                <button onClick={() => handleStatusChange('Sedang Berjalan')} className="btn btn-success text-white shadow-md">Mulai Training Ini</button>
-                            )}
-                             {plan.status === 'Sedang Berjalan' && (
-                                <button onClick={() => handleStatusChange('Menunggu Verifikasi')} className="btn btn-warning text-gray-800 shadow-md">Ajukan Verifikasi Selesai</button>
-                            )}
-                        </div>
+                         {!viewOnly && (
+                            <div className="pt-4 flex flex-col space-y-2">
+                                {plan.status === 'Disarankan' && (
+                                    <button onClick={() => handleStatusChange('Sedang Berjalan')} className="btn btn-success text-white shadow-md">Mulai Training Ini</button>
+                                )}
+                                {plan.status === 'Sedang Berjalan' && (
+                                    <button onClick={() => handleStatusChange('Menunggu Verifikasi')} className="btn btn-warning text-gray-800 shadow-md">Ajukan Verifikasi Selesai</button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div className="border-t lg:border-t-0 lg:border-l lg:pl-8 pt-4 lg:pt-0">

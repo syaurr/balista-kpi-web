@@ -8,11 +8,11 @@ import TrainingPlanItem from './TrainingPlanItem';
 
 export default function TrainingOversightClient({ initialPlans }) {
     const [filterStatus, setFilterStatus] = useState('Semua');
-    const [detailPlan, setDetailPlan] = useState(null); // State untuk modal detail
+    const [detailPlan, setDetailPlan] = useState(null);
     const router = useRouter();
 
     const handleVerification = async (plan, event) => {
-        event.stopPropagation();
+        event.stopPropagation(); 
         
         const confirmAction = window.confirm(`Verifikasi bahwa ${plan.karyawan.nama} telah menyelesaikan training "${plan.training_programs.nama_program}"?`);
         if (confirmAction) {
@@ -21,7 +21,6 @@ export default function TrainingOversightClient({ initialPlans }) {
                 alert(`Error: ${result.error}`);
             } else {
                 alert(result.success);
-                // Tutup modal jika kebetulan terbuka & refresh data
                 setDetailPlan(null); 
                 router.refresh();
             }
@@ -95,16 +94,14 @@ export default function TrainingOversightClient({ initialPlans }) {
                 </table>
             </div>
 
-            {/* Modal untuk menampilkan detail */}
             {detailPlan && (
                 <Modal 
                     isOpen={true} 
                     onClose={() => setDetailPlan(null)} 
                     title={`Detail Plan: ${detailPlan.karyawan.nama}`}
                 >
-                    {/* Tampilkan detail menggunakan komponen yang sudah ada */}
                     <div className="max-h-[70vh] overflow-y-auto">
-                        <TrainingPlanItem plan={detailPlan} />
+                        <TrainingPlanItem plan={detailPlan} viewOnly={true} />
                     </div>
                 </Modal>
             )}
