@@ -9,28 +9,30 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 // --- AKHIR PERBAIKAN ---
 
 
-export async function enrollInTraining(trainingId) {
+// Di dalam file: src/app/actions.js
+
+export async function enrollInTraining(trainingId, periode) { // <-- Terima 'periode' sebagai parameter
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'Anda harus login.' };
 
-    // PERBAIKAN: Ambil profil karyawan untuk mendapatkan ID yang benar
     const { data: karyawan } = await supabase.from('karyawan').select('id').eq('email', user.email).single();
     if (!karyawan) return { error: 'Profil karyawan tidak ditemukan.' };
 
-    const periode = `${new Date().toLocaleString('id-ID', { month: 'long' })} ${new Date().getFullYear()}`;
+    if (!periode) { // Validasi tambahan
+        return { error: 'Periode harus dipilih.' };
+    }
 
     const { error } = await supabase.from('karyawan_training_plan').insert({
-        karyawan_id: karyawan.id, // <-- Gunakan ID Karyawan yang benar
+        karyawan_id: karyawan.id,
         training_program_id: trainingId,
-        periode: periode,
+        periode: periode, // <-- Gunakan 'periode' yang dikirim dari client
         status: 'Sedang Berjalan',
         assigned_by: 'Inisiatif Sendiri'
     });
 
     if (error) {
         if (error.code === '23505') return { error: 'Anda sudah terdaftar di training ini pada periode yang sama.' };
-        console.error("Enroll error:", error);
         return { error: 'Gagal mendaftar training.' };
     }
 
@@ -46,15 +48,16 @@ export async function addTrainingProgram(formData) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'Anda harus login.' };
 
-    // PERBAIKAN: Ambil profil karyawan untuk mendapatkan ID, Peran, dan Posisi
     const { data: karyawan } = await supabase.from('karyawan').select('id, role, posisi').eq('email', user.email).single();
     if (!karyawan) return { error: 'Profil karyawan tidak ditemukan.' };
     
     const role = karyawan.role;
     const isPaid = formData.get('biaya') === 'Berbayar';
     
-    const status = (role === 'User' && isPaid) ? 'Menunggu Persetujuan' : 'Akan Datang';
+    // --- PERBAIKAN: Periode dibuat otomatis berdasarkan tanggal saat ini ---
     const periode = `${new Date().toLocaleString('id-ID', { month: 'long' })} ${new Date().getFullYear()}`;
+
+    const status = (role === 'User' && isPaid) ? 'Menunggu Persetujuan' : 'Akan Datang';
 
     const programData = {
         nama_program: formData.get('nama_program'),
@@ -86,9 +89,9 @@ export async function addTrainingProgram(formData) {
     // Jika user yang mengusulkan & trainingnya gratis, langsung daftarkan dia
     if (role === 'User' && !isPaid) {
         await supabase.from('karyawan_training_plan').insert({
-            karyawan_id: karyawan.id, // <-- Gunakan ID Karyawan yang benar
+            karyawan_id: karyawan.id,
             training_program_id: newProgram.id,
-            periode: periode,
+            periode: periode, // <-- Gunakan periode dari form
             status: 'Sedang Berjalan',
             assigned_by: 'Inisiatif Sendiri'
         });

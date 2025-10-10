@@ -34,19 +34,15 @@ export default function AddTrainingForm({ allAreas, onFinished }) {
     return (
         <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
             <p className="text-sm text-gray-500">
-                Gunakan form ini untuk mengusulkan training eksternal. Training gratis akan langsung dimulai, sementara training berbayar memerlukan persetujuan Admin.
+                Training gratis akan langsung dimulai pada periode bulan ini. Training berbayar akan memerlukan persetujuan Admin.
             </p>
             
-            {/* --- AWAL PENAMBAHAN FIELD LENGKAP --- */}
             <div><label className="block text-sm font-medium">Nama Program</label><input type="text" name="nama_program" className="input input-bordered w-full mt-1" required /></div>
-            <div><label className="block text-sm font-medium">Penyedia</label><input type="text" name="penyedia" className="input input-bordered w-full mt-1" /></div>
-            <div><label className="block text-sm font-medium">Topik Utama</label><input type="text" name="topik_utama" className="input input-bordered w-full mt-1" /></div>
-            <div><label className="block text-sm font-medium">Link Akses/Informasi</label><input type="url" name="link_akses" className="input input-bordered w-full mt-1" /></div>
+            
+            {/* --- PEMILIH PERIODE DIHAPUS DARI SINI --- */}
 
-            <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium">Tanggal Mulai</label><input type="date" name="tanggal_mulai" className="input input-bordered w-full mt-1"/></div>
-                <div><label className="block text-sm font-medium">Tanggal Berakhir</label><input type="date" name="tanggal_berakhir" className="input input-bordered w-full mt-1"/></div>
-            </div>
+            <div><label className="block text-sm font-medium">Penyedia</label><input type="text" name="penyedia" className="input input-bordered w-full mt-1" /></div>
+            <div><label className="block text-sm font-medium">Link Akses/Informasi</label><input type="url" name="link_akses" className="input input-bordered w-full mt-1" /></div>
 
             <div>
                 <label className="block text-sm font-medium">Area KPI Terkait (Opsional)</label>
@@ -74,7 +70,6 @@ export default function AddTrainingForm({ allAreas, onFinished }) {
                     <input type="number" name="biaya_nominal" className="input input-bordered w-full mt-1" placeholder="Contoh: 500000" required />
                 </div>
             )}
-            {/* --- AKHIR PENAMBAHAN FIELD LENGKAP --- */}
             
             <div className="pt-4">
                 <button type="submit" className="btn btn-primary w-full shadow-md" disabled={loading}>
