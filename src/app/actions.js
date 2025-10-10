@@ -43,6 +43,10 @@ export async function enrollInTraining(trainingId, periode) { // <-- Terima 'per
 
 
 // --- FUNGSI addTrainingProgram YANG SUDAH DI-UPGRADE ---
+// Di dalam file: src/app/actions.js
+
+// Di dalam file: src/app/actions.js
+
 export async function addTrainingProgram(formData) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -53,11 +57,19 @@ export async function addTrainingProgram(formData) {
     
     const role = karyawan.role;
     const isPaid = formData.get('biaya') === 'Berbayar';
-    
-    // --- PERBAIKAN: Periode dibuat otomatis berdasarkan tanggal saat ini ---
     const periode = `${new Date().toLocaleString('id-ID', { month: 'long' })} ${new Date().getFullYear()}`;
-
     const status = (role === 'User' && isPaid) ? 'Menunggu Persetujuan' : 'Akan Datang';
+
+    // --- AWAL PERBAIKAN LOGIKA POSISI ---
+    let posisiData = formData.getAll('posisi');
+
+    // Jika input 'posisi' dari form kosong (karena form sederhana tidak memilikinya),
+    // DAN pengguna yang login memiliki data posisi di profilnya,
+    // maka gunakan posisi pengguna tersebut sebagai default.
+    if (posisiData.length === 0 && karyawan.posisi) {
+        posisiData = [karyawan.posisi];
+    }
+    // --- AKHIR PERBAIKAN LOGIKA POSISI ---
 
     const programData = {
         nama_program: formData.get('nama_program'),
@@ -68,8 +80,7 @@ export async function addTrainingProgram(formData) {
         biaya: formData.get('biaya'),
         biaya_nominal: isPaid ? parseInt(formData.get('biaya_nominal') || 0, 10) : null,
         created_by_role: role,
-        // PERBAIKAN: Otomatis isi posisi jika yang menginput adalah User
-        posisi: role === 'User' ? [karyawan.posisi] : formData.getAll('posisi') || null,
+        posisi: posisiData, // Gunakan data posisi yang sudah diolah
         tanggal_mulai: formData.get('tanggal_mulai') || null,
         tanggal_berakhir: formData.get('tanggal_berakhir') || null,
     };
@@ -86,12 +97,11 @@ export async function addTrainingProgram(formData) {
         await supabase.from('training_area_link').insert(linksToInsert);
     }
 
-    // Jika user yang mengusulkan & trainingnya gratis, langsung daftarkan dia
     if (role === 'User' && !isPaid) {
         await supabase.from('karyawan_training_plan').insert({
             karyawan_id: karyawan.id,
             training_program_id: newProgram.id,
-            periode: periode, // <-- Gunakan periode dari form
+            periode: periode,
             status: 'Sedang Berjalan',
             assigned_by: 'Inisiatif Sendiri'
         });
