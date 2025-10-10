@@ -1,9 +1,9 @@
 export const dynamic = 'force-dynamic';
 
-import { createClient } from '../../../../utils/supabase/server';
-import { cookies } from 'next/headers';
 import AssessmentClient from '../../../../components/AssessmentClient';
 import { fetchAssessmentData } from '../../../../app/actions';
+import { createClient } from '../../../../utils/supabase/server';
+import { cookies } from 'next/headers';
 
 async function getEmployeeList() {
     const supabase = createClient(cookies());

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { saveFullAssessment, addRecommendation, updateRecommendation, deleteRecommendation } from '../app/actions';
 import ScoreCard from './ScoreCard';
@@ -59,6 +59,15 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
     const [linkModalKpi, setLinkModalKpi] = useState(null);
+
+     useEffect(() => {
+        // Efek ini akan berjalan setiap kali data dari server (initialAssessmentData) berubah
+        if (initialAssessmentData) {
+            setCurrentScores(initialAssessmentData.scores || {});
+            setCurrentGeneralNote(initialAssessmentData.generalNote || '');
+            setCurrentRecommendations(initialAssessmentData.recommendations || []);
+        }
+    }, [initialAssessmentData]); 
 
     const periode = useMemo(() => {
         if (!employeeIdFromUrl) return null;
