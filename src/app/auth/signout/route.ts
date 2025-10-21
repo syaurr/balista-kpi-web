@@ -1,7 +1,10 @@
-import { createClient } from '../../../utils/supabase/server'
-import { NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
+import { NextResponse, type NextRequest } from 'next/server' // <-- Impor 'NextRequest'
+import { cookies } from 'next/headers'
 
-export async function POST(req) {
+// --- PERBAIKAN: Tambahkan tipe 'NextRequest' ke parameter 'req' ---
+export async function POST(req: NextRequest) {
+  const cookieStore = cookies()
   const supabase = createClient()
 
   // Check if we have a session
@@ -11,9 +14,22 @@ export async function POST(req) {
 
   if (session) {
     await supabase.auth.signOut()
+    await fetch(`/api/revalidate?path=/&type=layout`, {
+      method: 'POST',
+    })
   }
 
   return NextResponse.redirect(new URL('/login', req.url), {
     status: 302,
   })
+}
+
+async function revalidatePath(path: string, type: string) {
+  try {
+    await fetch(`/api/revalidate?path=${path}&type=${type}`, {
+      method: 'POST',
+    })
+  } catch (error) {
+    console.error('Failed to revalidate:', error)
+  }
 }
