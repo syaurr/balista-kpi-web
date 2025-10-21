@@ -1,0 +1,4 @@
+[functions.generate-certificate]
+import_map = "import_map.json"
+verify_jwt = false
+static_files = ["functions/generate-certificate/template.html"]

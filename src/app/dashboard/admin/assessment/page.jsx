@@ -1,5 +1,4 @@
 export const dynamic = 'force-dynamic';
-
 import AssessmentClient from '../../../../components/AssessmentClient';
 import { fetchAssessmentData } from '../../../../app/actions';
 import { createClient } from '../../../../utils/supabase/server';
@@ -7,7 +6,12 @@ import { cookies } from 'next/headers';
 
 async function getEmployeeList() {
     const supabase = createClient(cookies());
-    const { data: employees } = await supabase.from('karyawan').select('id, nama, posisi').order('nama');
+    // --- PERBAIKAN: Hanya ambil karyawan yang bisa dinilai ---
+    const { data: employees } = await supabase
+        .from('karyawan')
+        .select('id, nama, posisi')
+        .neq('tipe_akun', 'Admin Non-Penilaian') // <-- KECUALIKAN TIPE AKUN KHUSUS
+        .order('nama');
     return employees || [];
 }
 

@@ -13,13 +13,16 @@ export default async function DashboardPage({ searchParams }) {
     redirect('/login');
   }
   
+  if (user.tipe_akun === 'Admin Non-Penilaian') {
+    redirect('/dashboard/admin');
+  }
+  
   return (
     <DashboardClient 
         user={user} 
         initialData={data}
         initialMonth={month}
         initialYear={year}
-        // --- PERBAIKAN: Kirim ID Karyawan & Periode ---
         karyawanId={user.id}
         periode={periode}
     />

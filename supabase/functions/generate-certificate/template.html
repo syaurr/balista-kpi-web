@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        /* Impor font yang dibutuhkan */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,700;1,400&family=Merriweather:wght@700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Darker+Grotesque:wght@300..900&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Spicy+Rice&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Poppins', sans-serif;
+            -webkit-print-color-adjust: exact; /* Memaksa background dicetak */
+            print-color-adjust: exact;
+        }
+        .certificate {
+            /* Ukuran A4 Landscape */
+            width: 11.693in;
+            height: 8.268in;
+            position: relative; /* Penting untuk positioning absolut */
+            
+            background-image: url('https://iuyjshctgtjbsgkymqqr.supabase.co/storage/v1/object/public/assets/background-certificate.png');
+            
+            background-size: cover;
+            background-repeat: no-repeat;
+        }
+        
+        /* Tempatkan semua teks dinamis di dalam 'div'
+          dengan positioning absolut.
+        */
+        
+        #nama-karyawan {
+            position: absolute;
+            width: 5.54in;
+            height: 0.95in;
+            left: 5.69in;
+            top: 2.95in;
+            
+            font-family: 'Spicy Rice', serif;
+            font-size: 57.5pt; /* pt (points) lebih baik untuk print */
+            color: #ffffff;
+            text-align: right;
+            
+            /* Mencegah teks turun baris jika terlalu panjang */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        #nama-aspek {
+            position: absolute;
+            width: 3.1in;
+            height: 0.27in;
+            left: 6.97in;
+            top: 5.37in;
+            
+            font-family: 'TAN Ashford', 'Merriweather', serif;
+            font-size: 16.5pt;
+            color: #f1d9a5;
+            text-align: right;
+            white-space: nowrap;
+        }
+        
+        #periode {
+            position: absolute;
+            width: 1.13in;
+            height: 0.26in;
+            left: 10.1in;
+            top: 5.38in;
+            
+            font-family: 'Poppins', sans-serif;
+            font-size: 16pt;
+            color: #ffffff;
+            text-align: left;
+            white-space: nowrap;
+        }
+        
+        #timestamp {
+            position: absolute;
+            width: 3.94in;
+            height: 0.12in;
+            left: 0.61in;
+            top: 7.87in;
+            
+            font-family: 'Poppins', sans-serif;
+            font-style: italic;
+            font-size: 7.8pt;
+            color: #808b8b;
+            text-align: left;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="certificate">
+        <div id="nama-karyawan">{{NAMA_KARYAWAN}}</div>
+        <div id="nama-aspek">{{NAMA_ASPEK}}</div>
+        <div id="periode">{{PERIODE}}</div>
+        <div id="timestamp">{{TIMESTAMP}}</div>
+    </div>
+</body>
+</html>

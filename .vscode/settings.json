@@ -1,0 +1,15 @@
+{
+  // Aktifkan Deno secara umum untuk workspace ini
+  "deno.enable": true,
+  
+  // Beritahu VS Code di mana letak file konfigurasi utama Deno.
+  // Ini adalah "jembatan" yang hilang.
+  "deno.config": "./supabase/deno.json",
+
+  // Sisa konfigurasi untuk kualitas kode
+  "deno.lint": true,
+  "deno.unstable": true,
+  "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  }
+}

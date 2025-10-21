@@ -8,8 +8,68 @@ import * as XLSX from 'xlsx';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 // --- AKHIR PERBAIKAN ---
 
+export async function getDashboardPageData(periode) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { user: null, data: null, error: 'User not authenticated' };
 
-// Di dalam file: src/app/actions.js
+  // --- AWAL PERBAIKAN ---
+  // Pastikan kita juga mengambil 'tipe_akun' agar 'page.jsx' bisa memeriksanya
+  const { data: karyawan, error: userError } = await supabase
+    .from('karyawan').select('id, nama, posisi, role, tipe_akun') // <-- 'tipe_akun' DITAMBAHKAN DI SINI
+    .eq('email', user.email)
+    .single();
+  // --- AKHIR PERBAIKAN ---
+
+  if (!karyawan) return { user: null, data: null, error: 'Failed to fetch user profile.' };
+
+  const karyawanId = karyawan.id;
+  
+  // Ambil ID periode dari nama periode
+  const { data: currentPeriod } = await supabase.from('assessment_periods').select('id').eq('nama_periode', periode).single();
+  const periodId = currentPeriod?.id;
+
+  const [
+    rekapResult, 
+    areaScoresResult, 
+    recommendationsResult, 
+    summaryResult,
+    recommendedTrainingsResult,
+    pendingTasksResult,
+    behavioralScoresResult
+  ] = await Promise.all([
+    supabase.rpc('get_rekap_kpi_data', { p_karyawan_id: karyawanId, p_posisi: karyawan.posisi, p_periode: periode }),
+    supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
+    supabase.from('kpi_summary_recommendations').select('rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
+    supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single(),
+    supabase.from('karyawan_training_plan')
+            .select('id, training_programs(*, training_area_link(area_name))') // Query ini sudah diperbaiki sebelumnya
+            .eq('karyawan_id', karyawanId)
+            .eq('periode', periode)
+            .eq('status', 'Disarankan'),
+    supabase.from('behavioral_assessors')
+            .select('id, behavioral_results(id), period:assessment_periods!inner(status)')
+            .eq('assessor_id', karyawanId)
+            .eq('period.status', 'Open'),
+    periodId ? supabase.rpc('calculate_behavioral_score', { p_employee_id: karyawanId, p_period_id: periodId }) : Promise.resolve({ data: [] })
+  ]);
+
+  const pendingTaskCount = pendingTasksResult.data?.filter(task => task.behavioral_results.length === 0).length || 0;
+
+  return {
+    user: karyawan, // <-- Sekarang objek 'karyawan' ini sudah berisi 'tipe_akun'
+    data: {
+      rekap: rekapResult.data || [],
+      areaScores: areaScoresResult.data || [],
+      recommendations: recommendationsResult.data || [],
+      summary: summaryResult.data || { catatan_kpi: `Belum ada catatan umum untuk periode ${periode}.` },
+      recommendedTrainings: recommendedTrainingsResult.data || [],
+      pendingTaskCount: pendingTaskCount,
+      behavioralScores: behavioralScoresResult.data || []
+    },
+    error: null,
+  };
+}
 
 export async function enrollInTraining(trainingId, periode) { // <-- Terima 'periode' sebagai parameter
     const supabase = createClient();
@@ -43,9 +103,6 @@ export async function enrollInTraining(trainingId, periode) { // <-- Terima 'per
 
 
 // --- FUNGSI addTrainingProgram YANG SUDAH DI-UPGRADE ---
-// Di dalam file: src/app/actions.js
-
-// Di dalam file: src/app/actions.js
 
 // Di dalam file: src/app/actions.js
 
@@ -554,68 +611,6 @@ export async function deleteRecommendation(formData) {
     return { success: 'Rekomendasi berhasil dihapus.' };
 }
 
-export async function getDashboardPageData(periode) {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { user: null, data: null, error: 'User not authenticated' };
-
-  const { data: karyawan, error: userError } = await supabase
-    .from('karyawan').select('id, nama, posisi, role').eq('email', user.email).single();
-  if (userError) return { user, data: null, error: 'Failed to fetch user profile.' };
-
-  const karyawanId = karyawan.id;
-  const posisi = karyawan.posisi;
-
-  const [
-    rekapResult, 
-    areaScoresResult, 
-    recommendationsResult, 
-    summaryResult,
-    recommendedTrainingsResult
-  ] = await Promise.all([
-    supabase.rpc('get_rekap_kpi_data', { p_karyawan_id: karyawanId, p_posisi: posisi, p_periode: periode }),
-    supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
-    supabase.from('kpi_summary_recommendations').select('rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
-    supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single(),
-    
-    // --- PERBAIKAN DI SINI ---
-    // Ambil semua kolom (*) dari training_programs, bukan hanya nama_program
-    supabase.from('karyawan_training_plan')
-            .select('id, training_programs(*, training_area_link(area_name))')
-            .eq('karyawan_id', karyawanId)
-            .eq('periode', periode)
-            .eq('status', 'Disarankan')
-  ]);
-
-  return {
-    user: karyawan,
-    data: {
-      rekap: rekapResult.data || [],
-      areaScores: areaScoresResult.data || [],
-      recommendations: recommendationsResult.data || [],
-      summary: summaryResult.data || { catatan_kpi: `Belum ada catatan umum untuk periode ${periode}.` },
-      recommendedTrainings: recommendedTrainingsResult.data || []
-    },
-    error: null,
-  };
-}
-
-export async function fetchUserRole() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    const { data: karyawan } = await supabase
-        .from('karyawan')
-        .select('role')
-        .eq('email', user.email)
-        .single();
-    
-    return karyawan?.role;
-}
-
-// --- FUNGSI-FUNGSI BARU UNTUK FITUR TRAINING ---
-
 /**
  * Mengubah status rencana training seorang karyawan.
  * Misalnya dari 'Disarankan' menjadi 'Sedang Berjalan'.
@@ -723,23 +718,20 @@ export async function submitTrainingFeedback(formData) {
  * @param {string} periode - Periode yang akan dianalisis, misal: "Agustus 2025"
  */
 export async function generateTrainingRecommendations(periode) {
-    const supabase = createClient();
     console.log(`--- Memulai proses pembuatan rekomendasi untuk periode: ${periode} ---`);
     
-    // --- PERBAIKAN UTAMA: Buat koneksi SUPER ADMIN menggunakan Service Key ---
     const supabaseAdmin = createAdminClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
         process.env.SUPABASE_SERVICE_KEY,
         { auth: { persistSession: false } }
     );
-    // Semua query di bawah ini sekarang akan menggunakan `supabaseAdmin`
-    // yang kebal terhadap error cookies dan RLS.
 
-    const { data: employees, error: empError } = await supabaseAdmin.from('karyawan').select('id, nama, posisi');
-    if (empError) {
-        console.error("Gagal mengambil data karyawan:", empError);
-        return { error: "Gagal mengambil data karyawan." };
-    }
+    const { data: employees, error: empError } = await supabaseAdmin
+        .from('karyawan')
+        .select('id, nama, posisi')
+        .neq('tipe_akun', 'Admin Non-Penilaian'); // <-- KECUALIKAN TIPE AKUN KHUSUS
+
+    if (empError) return { error: "Gagal mengambil data karyawan." };
 
     let recommendationsCreated = 0;
     let details = [];
@@ -757,13 +749,18 @@ export async function generateTrainingRecommendations(periode) {
             continue;
         }
         
-        const lowestArea = areaScores.filter(s => s.average_score > 0).sort((a, b) => a.average_score - a.average_score)[0];
+        // --- AWAL PERBAIKAN UTAMA ---
+        // Urutkan dengan benar: bandingkan skor 'a' dengan skor 'b'
+        const lowestArea = areaScores
+            .filter(s => s.average_score > 0)
+            .sort((a, b) => a.average_score - b.average_score)[0];
+        // --- AKHIR PERBAIKAN UTAMA ---
         
         if (!lowestArea) {
             console.log(` -> Semua skor area adalah 0. Karyawan dilewati.`);
             continue;
         }
-        console.log(` -> Area terendah ditemukan: "${lowestArea.area}"`);
+        console.log(` -> Area terendah ditemukan: "${lowestArea.area}" (Skor: ${lowestArea.average_score.toFixed(2)})`);
 
         const { data: linkedTrainings, error: linkError } = await supabaseAdmin
             .from('training_area_link')
@@ -801,5 +798,272 @@ export async function generateTrainingRecommendations(periode) {
     return { 
         success: `Proses selesai! ${recommendationsCreated} rekomendasi dibuat/diperbarui.`,
         details: details
+    };
+}
+// ... (semua server actions lain tidak berubah)
+
+export async function createAssessmentPeriod(formData) {
+    const supabase = createClient();
+    
+    const periodData = {
+        nama_periode: formData.get('nama_periode'),
+        start_date: formData.get('start_date'),
+        end_date: formData.get('end_date'),
+        status: 'Open'
+    };
+
+    const { data: newPeriod, error: periodError } = await supabase.from('assessment_periods').insert(periodData).select('id').single();
+    if (periodError) return { error: 'Gagal membuat periode baru. Pastikan nama periode unik.' };
+    const periodId = newPeriod.id;
+
+    // --- PERBAIKAN: Ambil SEMUA kolom atasan ---
+    const { data: allEmployees, error: empError } = await supabase.from('karyawan').select('id, nama, superior_id, superior_id_2, tipe_akun');
+    if (empError) return { error: 'Gagal mengambil data karyawan.' };
+
+    const assessableEmployees = allEmployees.filter(e => e.tipe_akun !== 'Admin Non-Penilaian');
+    const potentialPeers = allEmployees.filter(e => e.tipe_akun !== 'Admin Non-Penilaian');
+
+    let assessorsToInsert = [];
+    
+    for (const employee of assessableEmployees) {
+        
+        // a. Tugas Self-Assessment
+        assessorsToInsert.push({
+            period_id: periodId,
+            employee_id: employee.id,
+            assessor_id: employee.id,
+            assessor_type: 'self'
+        });
+
+        // b. Tugas Penilaian Atasan 1
+        if (employee.superior_id) {
+            assessorsToInsert.push({
+                period_id: periodId,
+                employee_id: employee.id,
+                assessor_id: employee.superior_id,
+                assessor_type: 'superior'
+            });
+        }
+        
+        // c. Tugas Penilaian Atasan 2 (Sekarang akan berfungsi)
+        if (employee.superior_id_2) {
+            assessorsToInsert.push({
+                period_id: periodId,
+                employee_id: employee.id,
+                assessor_id: employee.superior_id_2,
+                assessor_type: 'superior'
+            });
+        }
+
+        // d. Tugas Penilaian Rekan Kerja (Peer)
+        const peers = potentialPeers.filter(p => 
+            p.id !== employee.id &&
+            p.id !== employee.superior_id &&
+            p.id !== employee.superior_id_2
+        );
+        for (const peer of peers) {
+            assessorsToInsert.push({
+                period_id: periodId,
+                employee_id: employee.id,
+                assessor_id: peer.id,
+                assessor_type: 'peer'
+            });
+        }
+    }
+
+    const { error: assessorError } = await supabase.from('behavioral_assessors').insert(assessorsToInsert);
+    if (assessorError) {
+        console.error("Insert assessors error:", assessorError);
+        return { error: 'Gagal men-generate tugas penilai.' };
+    }
+
+    revalidatePath('/dashboard/admin/behavioral-assessment');
+    return { success: `Periode "${periodData.nama_periode}" berhasil dibuat dan ${assessorsToInsert.length} tugas penilaian telah di-generate.` };
+}
+
+/**
+ * MENUTUP PERIODE PENILAIAN
+ */
+export async function closeAssessmentPeriod(periodId) {
+    const supabase = createClient();
+    if (!periodId) return { error: 'ID Periode tidak ditemukan.' };
+
+    const { error } = await supabase.from('assessment_periods').update({ status: 'Closed' }).eq('id', periodId);
+    if (error) return { error: 'Gagal menutup periode penilaian.' };
+    
+    revalidatePath('/dashboard/admin/behavioral-assessment');
+    return { success: 'Periode penilaian berhasil ditutup.' };
+}
+
+/**
+ * MENYIMPAN HASIL PENILAIAN
+ */
+export async function submitBehavioralAssessment(formData) {
+    const supabase = createClient();
+    const relationshipId = formData.get('relationshipId');
+    const aspectIds = formData.getAll('aspectId');
+    
+    if (!relationshipId || aspectIds.length === 0) return { error: 'Data form tidak lengkap.' };
+
+    const resultsToUpsert = aspectIds.map(aspectId => ({
+        assessor_relationship_id: relationshipId,
+        aspect_id: aspectId,
+        score: formData.get(`score_${aspectId}`),
+        comment: formData.get(`comment_${aspectId}`) || null
+    }));
+
+    const { error } = await supabase.from('behavioral_results').upsert(resultsToUpsert, { onConflict: 'assessor_relationship_id, aspect_id' });
+    if (error) {
+        console.error("Submit behavioral assessment error:", error);
+        return { error: 'Gagal menyimpan penilaian.' };
+    }
+    
+    revalidatePath('/dashboard/my-assessments');
+    return { success: 'Penilaian berhasil disimpan!' };
+}
+
+// Di dalam file: src/app/actions.js
+
+export async function getBehavioralDashboardData(periode) {
+    const supabase = createClient();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return { error: 'Not authenticated' };
+
+    const { data: karyawan } = await supabase.from('karyawan').select('id, nama').eq('email', authUser.email).single();
+    if (!karyawan) return { error: 'Failed to fetch user profile.' };
+
+    const { data: currentPeriod } = await supabase.from('assessment_periods').select('id').eq('nama_periode', periode).single();
+    if (!currentPeriod) {
+        return { user: karyawan, data: { behavioralScores: [], pendingTaskCount: 0, certificates: [], comments: [] } };
+    }
+    const periodId = currentPeriod.id;
+
+    const [
+        behavioralScoresResult, 
+        pendingTasksResult, 
+        certificatesResult,
+        commentsResult
+    ] = await Promise.all([
+        supabase.rpc('calculate_behavioral_score', { p_employee_id: karyawan.id, p_period_id: periodId }),
+        supabase.from('behavioral_assessors').select('id, behavioral_results(id)').eq('assessor_id', karyawan.id).eq('period_id', periodId),
+        supabase.from('generated_certificates').select('*, behavioral_aspects(nama_aspek)').eq('employee_id', karyawan.id).eq('period_id', periodId),
+        
+        // --- PERBAIKAN: Gunakan filter '.not.is' untuk null dan '.neq' untuk string kosong ---
+        supabase.from('behavioral_results')
+            .select('comment, behavioral_aspects(nama_aspek), behavioral_assessors!inner(assessor_type)')
+            .eq('behavioral_assessors.employee_id', karyawan.id)
+            .eq('behavioral_assessors.period_id', periodId)
+            .not('comment', 'is', null) // <-- Pastikan tidak null
+            .neq('comment', '') // <-- Pastikan tidak string kosong
+    ]);
+
+    const pendingTaskCount = pendingTasksResult.data?.filter(task => task.behavioral_results.length === 0).length || 0;
+
+    return {
+        user: karyawan,
+        data: {
+            behavioralScores: behavioralScoresResult.data || [],
+            pendingTaskCount: pendingTaskCount,
+            certificates: certificatesResult.data || [],
+            comments: commentsResult.data || []
+        }
+    };
+}
+
+export async function invokeCertificateGenerator(employeeName, aspectName, period) {
+    const supabase = createClient(); // Gunakan createClient() standar
+
+    // supabase.functions.invoke adalah cara modern dan aman untuk memanggil Edge Function
+    const { data, error } = await supabase.functions.invoke('generate-certificate', {
+        body: { employeeName, aspectName, period }
+    });
+
+    if (error) {
+        console.error("Error invoking edge function:", error);
+        return { error: `Gagal memanggil function: ${error.message}` };
+    }
+
+    console.log("Hasil dari Edge Function:", data);
+    return { success: data };
+}
+
+
+// Di dalam file: src/app/actions.js
+// ... (semua server actions lain tidak berubah)
+
+// --- FUNGSI BARU UNTUK MEN-GENERATE SEMUA SERTIFIKAT ---
+export async function generateAllCertificatesForPeriod(periodId) {
+    const supabase = createClient();
+    
+    const { data: periodData } = await supabase.from('assessment_periods').select('nama_periode').eq('id', periodId).single();
+    if (!periodData) return { error: "Periode tidak ditemukan." };
+
+    const { data: aspects } = await supabase.from('behavioral_aspects').select('id, nama_aspek').eq('is_active', true);
+    if (!aspects || aspects.length === 0) return { error: "Tidak ada aspek penilaian yang aktif." };
+
+    // 1. Ambil SEMUA karyawan yang bisa dinilai
+    const { data: employees } = await supabase.from('karyawan').select('id, nama').neq('tipe_akun', 'Admin Non-Penilaian');
+    if (!employees || employees.length === 0) return { error: "Karyawan tidak ditemukan." };
+
+    let certificatesGenerated = 0;
+    let details = [];
+
+    // 2. Lakukan perulangan untuk SETIAP ASPEK
+    for (const aspect of aspects) {
+        let topScorer = null;
+        let maxScore = -1;
+
+        // 3. Lakukan perulangan untuk SETIAP KARYAWAN untuk mencari skor tertinggi
+        for (const employee of employees) {
+            // Panggil fungsi RPC untuk mendapatkan skor akhir karyawan ini
+            const { data: scores, error } = await supabase.rpc('calculate_behavioral_score', { 
+                p_employee_id: employee.id, 
+                p_period_id: periodId 
+            });
+
+            if (error || !scores) continue;
+
+            // Cari skor untuk aspek yang sedang kita proses
+            const aspectScoreData = scores.find(s => s.aspect_name === aspect.nama_aspek);
+            
+            if (aspectScoreData && aspectScoreData.final_score > maxScore) {
+                maxScore = aspectScoreData.final_score;
+                topScorer = employee;
+            }
+        }
+
+        // 4. Jika pemenang ditemukan (dan skornya di atas 0), panggil Edge Function
+        if (topScorer && maxScore > 0) {
+            const { data: certData, error: invokeError } = await supabase.functions.invoke('generate-certificate', {
+                body: { 
+                    employeeName: topScorer.nama, 
+                    aspectName: aspect.nama_aspek, 
+                    period: periodData.nama_periode 
+                }
+            });
+            
+            if (invokeError) {
+                details.push(`- Gagal generate sertifikat untuk ${topScorer.nama}: ${invokeError.message}`);
+            } else {
+                // 5. Simpan URL sertifikat ke database
+                await supabase.from('generated_certificates').upsert({
+                    employee_id: topScorer.id,
+                    period_id: periodId,
+                    aspect_id: aspect.id,
+                    certificate_url: certData.certificateUrl
+                }, { onConflict: 'employee_id, period_id, aspect_id' });
+
+                certificatesGenerated++;
+                details.push(`- Aspek "${aspect.nama_aspek}": Sertifikat dibuat untuk ${topScorer.nama}.`);
+            }
+        } else {
+            details.push(`- Aspek "${aspect.nama_aspek}": Tidak ada data penilaian yang valid ditemukan.`);
+        }
+    }
+
+    revalidatePath('/dashboard/community');
+    return { 
+        success: `${certificatesGenerated} sertifikat berhasil dibuat.`,
+        details: details 
     };
 }
