@@ -49,6 +49,21 @@ export default function AssessmentFormComponent({ assessmentTask, aspects, initi
 
     return (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-md space-y-8">
+
+            <div className="alert bg-teal-50 border border-teal-200">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-teal-600 shrink-0 w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <div>
+                    <h3 className="font-bold text-teal-800">Panduan Skala Penilaian</h3>
+                    <ul className="list-disc list-inside text-sm text-gray-700">
+                        <li><span className="font-semibold">90-100:</span> Sangat Baik</li>
+                        <li><span className="font-semibold">76-89:</span> Baik</li>
+                        <li><span className="font-semibold">70-75:</span> Cukup</li>
+                        <li><span className="font-semibold">60-69:</span> Kurang</li>
+                        <li><span className="font-semibold">1-59:</span> Sangat Kurang</li>
+                    </ul>
+                </div>
+            </div>
+
             {aspects.map(aspect => (
                 <div key={aspect.id} className="p-4 border rounded-lg">
                     <h3 className="font-bold text-lg">{aspect.nama_aspek}</h3>
@@ -68,10 +83,10 @@ export default function AssessmentFormComponent({ assessmentTask, aspects, initi
                         </div>
                     </div>
 
-                    <label className="label mt-4"><span className="label-text font-medium">Komentar (Opsional)</span></label>
+                    <label className="label mt-4"><span className="label-text font-medium">Komentar Dekriptif (Opsional)</span></label>
                     <textarea 
                         className="textarea textarea-bordered w-full"
-                        placeholder="Berikan contoh spesifik atau masukan pengembangan..."
+                        placeholder="Untuk memberikan konteks, apresiasi, atau masukan pengembangan...."
                         value={formData[aspect.id]?.comment || ''}
                         onChange={(e) => handleInputChange(aspect.id, 'comment', e.target.value)}
                     ></textarea>
