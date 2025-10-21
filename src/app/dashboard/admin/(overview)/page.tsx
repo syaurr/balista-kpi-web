@@ -1,6 +1,13 @@
 import Link from 'next/link';
+type AdminMenuCardProps = {
+  href: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode; // Tipe yang benar untuk ikon JSX
+};
 
-function AdminMenuCard({ href, title, description, icon }) {
+// Terapkan tipe data ke props
+function AdminMenuCard({ href, title, description, icon }: AdminMenuCardProps) {
     return (
         <Link href={href} className="bg-white p-6 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
             <div className="flex items-center space-x-4">
