@@ -28,14 +28,20 @@
       ]
     }
   },
+  
+  // --- AWAL PERBAIKAN ---
+  // Beritahu TypeScript untuk HANYA melihat ke dalam folder 'src'
+  // dan file-file definisi Next.js
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     ".next/types/**/*.ts"
   ],
+  // 'exclude' sekarang akan berfungsi dengan benar
   "exclude": [
     "node_modules",
-    "supabase" // <-- INI DIA PERBAIKANNYA
+    "supabase"
   ]
+  // --- AKHIR PERBAIKAN ---
 }
