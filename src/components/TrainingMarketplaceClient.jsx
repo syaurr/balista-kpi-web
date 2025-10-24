@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { enrollInTraining } from '../app/actions';
 import Modal from './Modal';
 import AddTrainingForm from './AddTrainingForm';
+import Link from 'next/link';
 
 // Komponen Modal Baru untuk memilih periode pendaftaran
 function EnrollModal({ training, onClose }) {
@@ -121,16 +122,26 @@ export default function TrainingMarketplaceClient({ trainings, allAreas }) {
 
     return (
         <div>
-            <div className="text-right mb-6">
+            {/* --- AWAL PERBAIKAN --- */}
+            <div className="flex justify-between items-center mb-6">
+                {/* Tombol navigasi baru di sebelah kiri */}
+                <Link href="/dashboard/learning-plan" className="btn btn-outline btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                    Lihat Learning Plan
+                </Link>
+                
+                {/* Tombol "Ajukan" tetap di sebelah kanan */}
                 <button onClick={() => setIsAddModalOpen(true)} className="btn btn-primary shadow-md">
                     + Ajukan Training Eksternal
                 </button>
             </div>
+            {/* --- AKHIR PERBAIKAN --- */}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {trainings.map(training => (
                     <TrainingCard key={training.id} training={training} onEnrollClick={setEnrollingTraining} />
                 ))}
-                {trainings.length === 0 && <p className="col-span-full text-center text-gray-500 italic">Saat ini belum ada training yang tersedia untuk posisi Anda.</p>}
+                 {trainings.length === 0 && <p className="col-span-full text-center text-gray-500 italic">Saat ini belum ada training yang tersedia untuk posisi Anda.</p>}
             </div>
             {isAddModalOpen && (
                 <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Usulkan Training Eksternal">

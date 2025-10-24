@@ -6,6 +6,7 @@ import { saveFullAssessment, addRecommendation, updateRecommendation, deleteReco
 import ScoreCard from './ScoreCard';
 import Modal from './Modal';
 import dynamic from 'next/dynamic';
+import KpiHistoryChart from './KpiHistoryChart';
 
 const AreaDonutChart = dynamic(() => import('./AreaDonutChart'), { ssr: false, loading: () => <p>Memuat chart...</p> });
 
@@ -46,7 +47,7 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const [yearInput, setYearInput] = useState(yearFromUrl);
 
     // 3. Semua data inti (kpis, scores, dll.) datang dari props, BUKAN dari state
-    const { kpis, scores, generalNote, recommendations, areaScores: initialAreaScores } = initialAssessmentData || {};
+    const { kpis, scores, generalNote, recommendations, areaScores: initialAreaScores, kpiHistory } = initialAssessmentData || {};
     
     // 4. State HANYA untuk data yang bisa diedit oleh user di halaman ini
     const [currentScores, setCurrentScores] = useState(scores || {});
@@ -257,6 +258,13 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                     <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <ScoreCard title="Total Nilai Akhir Bulanan" value={totalNilaiAkhir} />
                         <ScoreCard title="Nilai Akhir Proporsional" value={nilaiProporsional} prominent={true} />
+                    </section>
+
+                    <section className="bg-white p-6 rounded-xl shadow-md">
+                        <h3 className="text-lg font-bold text-[#6b1815] mb-4">Tren Kinerja KPI (Semua Periode)</h3>
+                        <div className="h-96 w-full">
+                            <KpiHistoryChart kpiHistory={kpiHistory} />
+                        </div>
                     </section>
                                         
                     <div className="bg-white p-6 rounded-xl shadow-md">

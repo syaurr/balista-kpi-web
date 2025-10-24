@@ -36,7 +36,8 @@ export async function getDashboardPageData(periode) {
     summaryResult,
     recommendedTrainingsResult,
     pendingTasksResult,
-    behavioralScoresResult
+    behavioralScoresResult,
+    kpiHistoryResult
   ] = await Promise.all([
     supabase.rpc('get_rekap_kpi_data', { p_karyawan_id: karyawanId, p_posisi: karyawan.posisi, p_periode: periode }),
     supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
@@ -51,7 +52,8 @@ export async function getDashboardPageData(periode) {
             .select('id, behavioral_results(id), period:assessment_periods!inner(status)')
             .eq('assessor_id', karyawanId)
             .eq('period.status', 'Open'),
-    periodId ? supabase.rpc('calculate_behavioral_score', { p_employee_id: karyawanId, p_period_id: periodId }) : Promise.resolve({ data: [] })
+    periodId ? supabase.rpc('calculate_behavioral_score', { p_employee_id: karyawanId, p_period_id: periodId }) : Promise.resolve({ data: [] }),
+    supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId })
   ]);
 
   const pendingTaskCount = pendingTasksResult.data?.filter(task => task.behavioral_results.length === 0).length || 0;
@@ -65,7 +67,8 @@ export async function getDashboardPageData(periode) {
       summary: summaryResult.data || { catatan_kpi: `Belum ada catatan umum untuk periode ${periode}.` },
       recommendedTrainings: recommendedTrainingsResult.data || [],
       pendingTaskCount: pendingTaskCount,
-      behavioralScores: behavioralScoresResult.data || []
+      behavioralScores: behavioralScoresResult.data || [],
+      kpiHistory: kpiHistoryResult.data || []
     },
     error: null,
   };
@@ -477,24 +480,34 @@ export async function getAssessmentDataLogic(supabase, karyawanId, periode) {
     return finalResult;
 }
 
+// Di dalam file: src/app/actions.js
+
 export async function fetchAssessmentData(karyawanId, periode) {
     const supabase = createClient();
     if (!karyawanId || !periode) {
-        return { kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [] };
+        return { kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [], kpiHistory: [] };
     }
 
     const { data: karyawan } = await supabase.from('karyawan').select('posisi').eq('id', karyawanId).single();
     if (!karyawan) {
-        return { kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [] };
+        return { kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [], kpiHistory: [] };
     }
 
-    const [kpisResult, scoresResult, summaryResult, recommendationsResult, areaScoresResult] = await Promise.all([
+    const [
+        kpisResult, 
+        scoresResult, 
+        summaryResult, 
+        recommendationsResult, 
+        areaScoresResult,
+        kpiHistoryResult // <-- TAMBAHAN BARU
+    ] = await Promise.all([
         supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', karyawan.posisi).eq('is_active', true).order('area_kerja'),
         supabase.from('penilaian_kpi').select('kpi_master_id, nilai').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single(),
         supabase.from('kpi_summary_recommendations').select('id, rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
-        // PERBAIKAN: Kirim parameter periode ke fungsi RPC
-        supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }) 
+        supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
+        // --- PANGGILAN BARU: Ambil data riwayat untuk karyawan yang dipilih ---
+        supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId })
     ]);
     
     if (kpisResult.error) console.error("KPI Fetch Error:", kpisResult.error);
@@ -509,7 +522,8 @@ export async function fetchAssessmentData(karyawanId, periode) {
         scores: scoresMap,
         generalNote: summaryResult.data?.catatan_kpi || '',
         recommendations: recommendationsResult.data || [],
-        areaScores: areaScoresResult.data || []
+        areaScores: areaScoresResult.data || [],
+        kpiHistory: kpiHistoryResult.data || [] // <-- KIRIM DATA BARU
     };
 }
 

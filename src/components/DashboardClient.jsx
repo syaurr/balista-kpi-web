@@ -7,6 +7,29 @@ import ScoreCard from './ScoreCard';
 import AreaDonutChart from './AreaDonutChart';
 import { updateTrainingPlanStatus } from '../app/actions';
 import Modal from './Modal'; // <-- Import komponen Modal
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler, // <-- Tambahkan Filler untuk arsir
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler // <-- Daftarkan Filler
+);
 
 function RecommendedTrainingModal({ plan, onClose, onStart, loading }) {
     // Ambil detail program dari data yang sudah ada
@@ -62,10 +85,49 @@ function RecommendedTrainingModal({ plan, onClose, onStart, loading }) {
         </Modal>
     );
 }
+function KpiHistoryChart({ kpiHistory }) {
+    const data = {
+        labels: kpiHistory.map(item => item.periode),
+        datasets: [
+            {
+                label: 'Nilai Akhir Proporsional',
+                data: kpiHistory.map(item => item.nilai_proporsional.toFixed(2)),
+                borderColor: 'rgba(2, 132, 130, 1)', // Warna teal
+                backgroundColor: 'rgba(2, 132, 130, 0.2)', // Warna arsir teal
+                fill: true,
+                tension: 0.3 // Membuat garis sedikit melengkung
+            },
+            {
+                label: 'Total Nilai Akhir',
+                data: kpiHistory.map(item => item.total_nilai_akhir.toFixed(2)),
+                borderColor: 'rgba(108, 117, 125, 1)', // Warna abu-abu
+                backgroundColor: 'rgba(108, 117, 125, 0.1)', // Warna arsir abu-abu
+                fill: true,
+                tension: 0.3
+            }
+        ]
+    };
+
+    const options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'bottom' },
+        },
+        scales: {
+            y: { 
+                beginAtZero: true, 
+                max: 100 
+            }
+        }
+    };
+    
+    return <Line options={options} data={data} />;
+}
 
 export default function DashboardClient({ user, initialData, initialMonth, initialYear, karyawanId, periode }) {
     const router = useRouter();
-    const { rekap, areaScores, recommendations, summary, recommendedTrainings } = initialData;
+    const { rekap, areaScores, recommendations, summary, recommendedTrainings, pendingTaskCount, behavioralScores, kpiHistory } = initialData;
 
     const [month, setMonth] = useState(initialMonth);
     const [year, setYear] = useState(initialYear);
@@ -171,6 +233,21 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <ScoreCard title="Total Nilai Akhir Bulanan" value={totalNilaiAkhir} />
                     <ScoreCard title="Nilai Akhir Proporsional" value={nilaiProporsional} prominent={true} />
+                </div>
+            </section>
+
+            <section className="bg-white p-6 rounded-xl shadow-md mb-8">
+                <h3 className="text-lg font-bold text-[#6b1815] mb-4">Tren Kinerja KPI (Semua Periode)</h3>
+                <div className="h-96 w-full">
+                    {kpiHistory && kpiHistory.length > 0 ? (
+                        <KpiHistoryChart kpiHistory={kpiHistory} />
+                    ) : (
+                        <div className="flex items-center justify-center h-full">
+                            <p className="italic text-gray-500 text-center">
+                                Data riwayat belum cukup untuk menampilkan grafik tren.
+                            </p>
+                        </div>
+                    )}
                 </div>
             </section>
 
