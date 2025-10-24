@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-// --- PERBAIKAN: Path yang benar dari folder 'components' ---
 import { submitBehavioralAssessment } from '../app/actions';
 
 export default function AssessmentFormComponent({ assessmentTask, aspects, initialResults }) {
@@ -16,12 +15,21 @@ export default function AssessmentFormComponent({ assessmentTask, aspects, initi
     
     const [formData, setFormData] = useState(initialScores);
 
+    // --- AWAL PERBAIKAN ---
     const handleInputChange = (aspectId, type, value) => {
         setFormData(prev => ({
             ...prev,
-            [aspectId]: { ...prev[aspectId], [type]: value }
+            [aspectId]: {
+                // Ambil nilai skor sebelumnya, atau default ke 0
+                score: prev[aspectId]?.score || 0,
+                // Ambil nilai komentar sebelumnya, atau default ke string kosong
+                comment: prev[aspectId]?.comment || '',
+                // Timpa nilai yang sedang diubah (baik 'score' atau 'comment')
+                [type]: value
+            }
         }));
     };
+    // --- AKHIR PERBAIKAN ---
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -30,6 +38,8 @@ export default function AssessmentFormComponent({ assessmentTask, aspects, initi
         const formPayload = new FormData();
         formPayload.append('relationshipId', assessmentTask.id);
         aspects.forEach(aspect => {
+            // Logika ini sekarang aman karena handleInputChange sudah memastikan
+            // 'score' dan 'comment' selalu ada.
             const aspectData = formData[aspect.id] || { score: 0, comment: '' };
             formPayload.append('aspectId', aspect.id);
             formPayload.append(`score_${aspect.id}`, aspectData.score);
@@ -49,7 +59,7 @@ export default function AssessmentFormComponent({ assessmentTask, aspects, initi
 
     return (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-md space-y-8">
-
+            
             <div className="alert bg-teal-50 border border-teal-200">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-teal-600 shrink-0 w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 <div>
@@ -83,10 +93,11 @@ export default function AssessmentFormComponent({ assessmentTask, aspects, initi
                         </div>
                     </div>
 
-                    <label className="label mt-4"><span className="label-text font-medium">Komentar Dekriptif (Opsional)</span></label>
+                    <label className="label mt-4"><span className="label-text font-medium">Komentar (Opsional)</span></label>
                     <textarea 
                         className="textarea textarea-bordered w-full"
-                        placeholder="Untuk memberikan konteks, apresiasi, atau masukan pengembangan...."
+                        placeholder="Berikan contoh spesifik atau masukan pengembangan..."
+                        // Logika ini juga sekarang aman
                         value={formData[aspect.id]?.comment || ''}
                         onChange={(e) => handleInputChange(aspect.id, 'comment', e.target.value)}
                     ></textarea>

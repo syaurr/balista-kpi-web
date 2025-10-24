@@ -3,13 +3,149 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import BehavioralRadarChart from './BehavioralRadarChart';
+
+// --- AWAL IMPORT BARU UNTUK GRAFIK ---
+import {
+  Chart as ChartJS,
+  RadialLinearScale,
+  PointElement,
+  LineElement,
+  Filler,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Radar } from 'react-chartjs-2';
+
+// Daftarkan komponen yang dibutuhkan oleh Radar Chart
+ChartJS.register(
+  RadialLinearScale,
+  PointElement,
+  LineElement,
+  Filler,
+  Tooltip,
+  Legend
+);
+// --- AKHIR IMPORT BARU ---
+
+// --- KOMPONEN GRAFIK RADAR ---
+function BehavioralRadarChart({ scores }) {
+  
+  // Objek Peta Warna (Map)
+  const colorMap = {
+    red: { fill: 'rgba(220, 53, 69, 0.2)', border: 'rgba(220, 53, 69, 1)' },
+    orange: { fill: 'rgba(253, 126, 20, 0.2)', border: 'rgba(253, 126, 20, 1)' },
+    yellow: { fill: 'rgba(255, 193, 7, 0.2)', border: 'rgba(255, 193, 7, 1)' },
+    blue: { fill: 'rgba(13, 110, 253, 0.2)', border: 'rgba(13, 110, 253, 1)' },
+    green: { fill: 'rgba(25, 135, 84, 0.2)', border: 'rgba(25, 135, 84, 1)' },
+  };
+
+  // Fungsi 1: Mendapatkan warna individual
+  const getScoreColor = (score) => {
+    if (score <= 20) return colorMap.red.border;
+    if (score <= 40) return colorMap.orange.border;
+    if (score <= 60) return colorMap.yellow.border;
+    if (score <= 80) return colorMap.blue.border;
+    return colorMap.green.border;
+  };
+  
+  // Fungsi 2: Mendapatkan warna dominan
+  const getDominantColor = (scores) => {
+    if (!scores || scores.length === 0) return colorMap.blue; // Default
+    const scoreColors = scores.map(item => {
+      const score = item.final_score;
+      if (score <= 20) return 'red';
+      if (score <= 40) return 'orange';
+      if (score <= 60) return 'yellow';
+      if (score <= 80) return 'blue';
+      return 'green';
+    });
+    
+    const colorCounts = scoreColors.reduce((acc, color) => {
+      acc[color] = (acc[color] || 0) + 1;
+      return acc;
+    }, {});
+    
+    let dominantColorName = 'blue';
+    let maxCount = 0;
+    for (const color in colorCounts) {
+      if (colorCounts[color] > maxCount) {
+        maxCount = colorCounts[color];
+        dominantColorName = color;
+      }
+    }
+    return colorMap[dominantColorName];
+  };
+
+  // --- Kalkulasi Warna ---
+  const dominantColor = useMemo(() => getDominantColor(scores), [scores]);
+  const pointColors = useMemo(() => scores.map(item => getScoreColor(item.final_score)), [scores]);
+
+  const data = {
+    labels: scores.map(item => item.aspect_name),
+    datasets: [
+      {
+        label: 'Skor Aspek',
+        data: scores.map(item => item.final_score.toFixed(2)),
+        fill: true,
+        backgroundColor: dominantColor.fill, // Arsir: Warna Dominan
+        borderColor: dominantColor.border,   // Garis: Warna Dominan
+        borderWidth: 2,
+        
+        pointBackgroundColor: pointColors, // Titik: Warna Individual
+        pointBorderColor: '#fff',
+        pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: pointColors, // Hover Titik: Warna Individual
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      },
+    ],
+  };
+
+  const options = {
+    maintainAspectRatio: false,
+    scales: {
+      r: {
+        angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
+        grid: { color: 'rgba(0, 0, 0, 0.1)' },
+        pointLabels: {
+          font: { size: 14 },
+          color: '#033f3f'
+        },
+        ticks: {
+          backdropColor: 'white',
+          color: 'grey',
+          beginAtZero: true,
+          min: 0,
+          max: 100,
+          stepSize: 20
+        },
+      },
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          labelColor: function(context) {
+            const color = pointColors[context.dataIndex];
+            return {
+              borderColor: color,
+              backgroundColor: color,
+            };
+          }
+        }
+      }
+    }
+  };
+
+  return <Radar data={data} options={options} />;
+}
+// --- AKHIR KOMPONEN GRAFIK RADAR ---
+
 
 // --- KOMPONEN UTAMA DASHBOARD ---
 export default function BehavioralDashboardClient({ user, initialData, allPeriods, activePeriod, error }) {
     const router = useRouter();
     const [selectedPeriod, setSelectedPeriod] = useState(activePeriod);
-    
     const { behavioralScores, pendingTaskCount, certificates, comments } = initialData || {};
 
     const handlePeriodChange = () => {
@@ -22,9 +158,7 @@ export default function BehavioralDashboardClient({ user, initialData, allPeriod
         return sum / behavioralScores.length;
     }, [behavioralScores]);
 
-    // --- AWAL PERBAIKAN: Mengelompokkan Komentar per Aspek ---
     const groupedComments = useMemo(() => {
-        // --- PERBAIKAN: Filter juga untuk string "undefined" ---
         const validComments = (comments || []).filter(c => 
             c.comment && 
             c.comment.trim() !== '' && 
@@ -41,9 +175,7 @@ export default function BehavioralDashboardClient({ user, initialData, allPeriod
             acc[aspectName].push(comment.comment);
             return acc;
         }, {});
-
     }, [comments]);
-    // --- AKHIR PERBAIKAN ---
 
     if (error) {
         return <div className="alert alert-error">{error}</div>
@@ -51,8 +183,16 @@ export default function BehavioralDashboardClient({ user, initialData, allPeriod
 
     return (
         <div className="space-y-8">
-            {/* Filter Periode */}
-            <div className="flex justify-end items-center">
+            
+            {/* --- AWAL PERBAIKAN --- */}
+            <div className="flex justify-between items-center">
+                {/* Tombol navigasi baru di sebelah kiri */}
+                <Link href="/dashboard/my-assessments" className="btn btn-outline btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                    Lihat Tugas Penilaian Saya
+                </Link>
+                
+                {/* Filter Periode di sebelah kanan */}
                 <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-md">
                     <span className="font-semibold text-sm">Lihat Periode:</span>
                     <select value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)} className="select select-bordered select-sm">
@@ -61,6 +201,7 @@ export default function BehavioralDashboardClient({ user, initialData, allPeriod
                     <button onClick={handlePeriodChange} className="btn btn-sm btn-primary">Lihat</button>
                 </div>
             </div>
+            {/* --- AKHIR PERBAIKAN --- */}
 
             {/* Notifikasi Tugas */}
             {pendingTaskCount > 0 && (
@@ -78,15 +219,12 @@ export default function BehavioralDashboardClient({ user, initialData, allPeriod
             <div className="card bg-white shadow-xl border">
                 <div className="card-body">
                     <h2 className="card-title text-[#6b1815]">Skor Penilaian Behavioral</h2>
-                    
                     <div className="text-center mb-4">
                         <div className="text-gray-500">Skor Rata-rata Total</div>
                         <div className="text-6xl font-bold text-teal-600">{totalBehavioralScore.toFixed(2)}</div>
                     </div>
-                    
                     {behavioralScores && behavioralScores.length > 0 ? (
                         <div className="w-full h-96 md:h-[500px]">
-                            {/* Memanggil komponen chart yang sudah di-import */}
                             <BehavioralRadarChart scores={behavioralScores} />
                         </div>
                     ) : (
@@ -97,6 +235,7 @@ export default function BehavioralDashboardClient({ user, initialData, allPeriod
                 </div>
             </div>
 
+            {/* Panel Komentar */}
             <div className="card bg-white shadow-xl border">
                 <div className="card-body">
                     <h2 className="card-title text-[#6b1815]">Masukan Anonim per Aspek</h2>
