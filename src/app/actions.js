@@ -948,7 +948,7 @@ export async function getBehavioralDashboardData(periode) {
 
     const { data: currentPeriod } = await supabase.from('assessment_periods').select('id').eq('nama_periode', periode).single();
     if (!currentPeriod) {
-        return { user: karyawan, data: { behavioralScores: [], pendingTaskCount: 0, certificates: [], comments: [] } };
+        return { user: karyawan, data: { behavioralScores: [], pendingTaskCount: 0, certificates: [], comments: [], topRankings: {} } };
     }
     const periodId = currentPeriod.id;
 
@@ -956,21 +956,23 @@ export async function getBehavioralDashboardData(periode) {
         behavioralScoresResult, 
         pendingTasksResult, 
         certificatesResult,
-        commentsResult
+        commentsResult,
+        topRankingsResult
     ] = await Promise.all([
         supabase.rpc('calculate_behavioral_score', { p_employee_id: karyawan.id, p_period_id: periodId }),
         supabase.from('behavioral_assessors').select('id, behavioral_results(id)').eq('assessor_id', karyawan.id).eq('period_id', periodId),
         supabase.from('generated_certificates').select('*, behavioral_aspects(nama_aspek)').eq('employee_id', karyawan.id).eq('period_id', periodId),
-        
-        // --- PERBAIKAN: Gunakan filter '.not.is' untuk null dan '.neq' untuk string kosong ---
         supabase.from('behavioral_results')
             .select('comment, behavioral_aspects(nama_aspek), behavioral_assessors!inner(assessor_type)')
             .eq('behavioral_assessors.employee_id', karyawan.id)
             .eq('behavioral_assessors.period_id', periodId)
-            .not('comment', 'is', null) // <-- Pastikan tidak null
-            .neq('comment', '') // <-- Pastikan tidak string kosong
+            .not('comment', 'is', null)
+            .neq('comment', ''),
+        supabase.rpc('get_top_behavioral_rankings', { p_period_id: periodId })
     ]);
 
+    // Hapus "alat pelacak" yang sudah tidak kita perlukan
+    
     const pendingTaskCount = pendingTasksResult.data?.filter(task => task.behavioral_results.length === 0).length || 0;
 
     return {
@@ -979,7 +981,9 @@ export async function getBehavioralDashboardData(periode) {
             behavioralScores: behavioralScoresResult.data || [],
             pendingTaskCount: pendingTaskCount,
             certificates: certificatesResult.data || [],
-            comments: commentsResult.data || []
+            comments: commentsResult.data || [],
+            // --- INI DIA PERBAIKANNYA ---
+            topRankings: topRankingsResult.data || {} 
         }
     };
 }

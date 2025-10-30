@@ -3,8 +3,6 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-
-// --- AWAL IMPORT BARU UNTUK GRAFIK ---
 import {
   Chart as ChartJS,
   RadialLinearScale,
@@ -16,7 +14,6 @@ import {
 } from 'chart.js';
 import { Radar } from 'react-chartjs-2';
 
-// Daftarkan komponen yang dibutuhkan oleh Radar Chart
 ChartJS.register(
   RadialLinearScale,
   PointElement,
@@ -25,7 +22,6 @@ ChartJS.register(
   Tooltip,
   Legend
 );
-// --- AKHIR IMPORT BARU ---
 
 // --- KOMPONEN GRAFIK RADAR ---
 function BehavioralRadarChart({ scores }) {
@@ -140,13 +136,53 @@ function BehavioralRadarChart({ scores }) {
   return <Radar data={data} options={options} />;
 }
 // --- AKHIR KOMPONEN GRAFIK RADAR ---
+function TopRankings({ topRankings }) {
+    const rankingsArray = useMemo(() => {
+        if (!topRankings) return [];
+        return Object.entries(topRankings).map(([aspectName, ranks]) => ({
+            aspectName,
+            ranks: ranks || [] // Pastikan ranks adalah array
+        }));
+    }, [topRankings]);
 
+    if (rankingsArray.length === 0) {
+        return <p className="italic text-gray-500">Peringkat akan tersedia setelah periode ditutup dan dinilai.</p>;
+    }
 
-// --- KOMPONEN UTAMA DASHBOARD ---
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {rankingsArray.map(({ aspectName, ranks }) => (
+                <div key={aspectName} className="p-4 border rounded-lg bg-gray-50">
+                    <h4 className="font-bold text-teal-700 mb-3">{aspectName}</h4>
+                    <ol className="space-y-2">
+                        {ranks.map((rank, index) => (
+                            <li key={rank.employee_name} className="flex items-center gap-3">
+                                <span className={`font-bold text-lg ${
+                                    index === 0 ? 'text-yellow-500' : 
+                                    index === 1 ? 'text-gray-500' : 'text-yellow-700'
+                                }`}>
+                                    {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                                </span>
+                                <div>
+                                    <span className="font-semibold">{rank.employee_name}</span>
+                                    <span className="text-sm text-gray-600 block">Skor: {rank.final_score.toFixed(2)}</span>
+                                </div>
+                            </li>
+                        ))}
+                    </ol>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export default function BehavioralDashboardClient({ user, initialData, allPeriods, activePeriod, error }) {
+
     const router = useRouter();
     const [selectedPeriod, setSelectedPeriod] = useState(activePeriod);
-    const { behavioralScores, pendingTaskCount, certificates, comments } = initialData || {};
+    
+    // --- Ambil data 'topRankings' ---
+    const { behavioralScores, pendingTaskCount, certificates, comments, topRankings } = initialData || {};
 
     const handlePeriodChange = () => {
         router.push(`/dashboard/behavioral?periode=${selectedPeriod}`);
@@ -167,11 +203,7 @@ export default function BehavioralDashboardClient({ user, initialData, allPeriod
         
         return validComments.reduce((acc, comment) => {
             const aspectName = comment.behavioral_aspects?.nama_aspek || 'Komentar Lainnya';
-            
-            if (!acc[aspectName]) {
-                acc[aspectName] = [];
-            }
-            
+            if (!acc[aspectName]) acc[aspectName] = [];
             acc[aspectName].push(comment.comment);
             return acc;
         }, {});
@@ -232,6 +264,13 @@ export default function BehavioralDashboardClient({ user, initialData, allPeriod
                             Hasil akan muncul setelah periode penilaian ditutup.
                         </p>
                     )}
+                </div>
+            </div>
+
+            <div className="card bg-white shadow-xl border">
+                <div className="card-body">
+                    <h2 className="card-title text-[#6b1815]">Peringkat 3 Teratas (Semua Karyawan)</h2>
+                    <TopRankings topRankings={topRankings} />
                 </div>
             </div>
 
