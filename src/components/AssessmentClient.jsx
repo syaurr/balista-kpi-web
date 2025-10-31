@@ -35,26 +35,20 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    // --- ARSITEKTUR BARU ---
-    // 1. Baca parameter URL untuk mengontrol TAMPILAN form filter
     const employeeIdFromUrl = searchParams.get('karyawanId') || '';
     const monthFromUrl = searchParams.get('bulan') || (new Date().getMonth() + 1).toString().padStart(2, '0');
     const yearFromUrl = searchParams.get('tahun') || new Date().getFullYear().toString();
     
-    // 2. State HANYA untuk input form filter
     const [employeeInput, setEmployeeInput] = useState(employeeIdFromUrl);
     const [monthInput, setMonthInput] = useState(monthFromUrl);
     const [yearInput, setYearInput] = useState(yearFromUrl);
 
-    // 3. Semua data inti (kpis, scores, dll.) datang dari props, BUKAN dari state
     const { kpis, scores, generalNote, recommendations, areaScores: initialAreaScores, kpiHistory } = initialAssessmentData || {};
     
-    // 4. State HANYA untuk data yang bisa diedit oleh user di halaman ini
     const [currentScores, setCurrentScores] = useState(scores || {});
     const [currentGeneralNote, setCurrentGeneralNote] = useState(generalNote || '');
     const [currentRecommendations, setCurrentRecommendations] = useState(recommendations || []);
     
-    // ... (State lain seperti loading, message, modal tidak berubah)
     const [editingRecommendation, setEditingRecommendation] = useState(null);
     const [newRecommendation, setNewRecommendation] = useState('');
     const [loading, setLoading] = useState(false);
@@ -62,7 +56,6 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const [linkModalKpi, setLinkModalKpi] = useState(null);
 
      useEffect(() => {
-        // Efek ini akan berjalan setiap kali data dari server (initialAssessmentData) berubah
         if (initialAssessmentData) {
             setCurrentScores(initialAssessmentData.scores || {});
             setCurrentGeneralNote(initialAssessmentData.generalNote || '');
@@ -75,7 +68,6 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
         return `${new Date(0, parseInt(monthFromUrl, 10) - 1).toLocaleString('id-ID', { month: 'long' })} ${yearFromUrl}`;
     }, [monthFromUrl, yearFromUrl, employeeIdFromUrl]);
 
-    // Fungsi ini HANYA mengubah URL, membiarkan server mengambil data baru
     const handleSelectionChange = () => {
         const params = new URLSearchParams();
         params.set('karyawanId', employeeInput);
@@ -85,27 +77,20 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     };
     
     const { totalNilaiAkhir, nilaiProporsional, areaScores } = useMemo(() => {
+        // ... (Logika kalkulasi tidak berubah) ...
         if (!kpis || kpis.length === 0) {
             return { totalNilaiAkhir: 0, nilaiProporsional: 0, areaScores: [] };
         }
-
         let totalNilai = 0;
         let totalBobotYangDinilai = 0;
         const areaData = {};
-
         kpis.forEach(kpi => {
             const score = currentScores[kpi.id] || 0;
             const nilai = score * (kpi.bobot / 100.0);
-
-            // 1. Total Nilai Akhir dihitung dari SEMUA KPI yang ada (termasuk yang skornya 0)
             totalNilai += nilai;
-            
-            // 2. Total Bobot untuk Proporsional HANYA dihitung dari KPI yang skornya > 0
             if (score > 0) {
                 totalBobotYangDinilai += kpi.bobot;
             }
-            
-            // 3. Logika untuk chart juga HANYA dari KPI yang skornya > 0
             if (score > 0) {
                 const areaName = kpi.area || 'Lain-lain';
                 if (!areaData[areaName]) {
@@ -115,14 +100,11 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                 areaData[areaName].count += 1;
             }
         });
-        
         const proporsional = totalBobotYangDinilai > 0 ? (totalNilai / (totalBobotYangDinilai / 100.0)) : 0;
-        
         const finalAreaScores = Object.entries(areaData).map(([area, data]) => ({
             area,
             average_score: data.count > 0 ? data.totalScore / data.count : 0
         }));
-
         return { totalNilaiAkhir: totalNilai, nilaiProporsional: proporsional, areaScores: finalAreaScores };
     }, [currentScores, kpis]);
 
@@ -207,9 +189,12 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
         setLoading(true);
         setMessage(null);
         const formData = new FormData();
-        formData.append('karyawanId', selectedEmployeeId);
+        
+        // --- AWAL PERBAIKAN: Gunakan 'employeeIdFromUrl' ---
+        formData.append('karyawanId', employeeIdFromUrl);
+        // --- AKHIR PERBAIKAN ---
+
         formData.append('periode', periode);
-        // PERBAIKAN: Kirim data yang ada di state saat ini
         formData.append('scores', JSON.stringify(currentScores));
         formData.append('generalNote', currentGeneralNote);
 
@@ -254,7 +239,6 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
 
            {initialAssessmentData ? (
                 <>
-                    {/* Tampilkan semua data dari state yang sudah diinisialisasi */}
                     <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <ScoreCard title="Total Nilai Akhir Bulanan" value={totalNilaiAkhir} />
                         <ScoreCard title="Nilai Akhir Proporsional" value={nilaiProporsional} prominent={true} />
@@ -266,7 +250,7 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                             <KpiHistoryChart kpiHistory={kpiHistory} />
                         </div>
                     </section>
-                                        
+                                
                     <div className="bg-white p-6 rounded-xl shadow-md">
                         <label className="block text-sm font-bold text-gray-700 mb-2">Catatan Umum</label>
                         <textarea value={currentGeneralNote} onChange={(e) => setCurrentGeneralNote(e.target.value)} rows="3" className="textarea textarea-bordered w-full"/>
@@ -367,7 +351,7 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                         formData.append('id', editingRecommendation.id);
                         await updateRecommendation(formData);
                         setEditingRecommendation(null);
-                        router.refresh(); // Refresh untuk memuat ulang data
+                        router.refresh(); 
                     }}>
                         <textarea 
                             name="rekomendasi_text"
