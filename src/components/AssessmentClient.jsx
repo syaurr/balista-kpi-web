@@ -163,14 +163,16 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     };
 
     const handleAddRecommendation = async () => {
-        if (newRecommendation.trim() && selectedEmployeeId && periode) {
-            await addRecommendation(selectedEmployeeId, periode, newRecommendation);
+        // Ganti 'selectedEmployeeId' dengan 'employeeIdFromUrl'
+        if (newRecommendation.trim() && employeeIdFromUrl && periode) {
+            await addRecommendation(employeeIdFromUrl, periode, newRecommendation);
             setNewRecommendation('');
-            fetchAllData(); // Muat ulang semua data
+            // --- AWAL PERBAIKAN 2 ---
+            // Ganti 'fetchAllData()' dengan 'router.refresh()'
+            router.refresh(); 
         }
     };
 
-    // --- FUNGSI BARU UNTUK MENGHAPUS REKOMENDASI ---
     const handleDeleteRecommendation = async (rec) => {
         if (window.confirm(`Yakin ingin menghapus rekomendasi: "${rec.rekomendasi_text}"?`)) {
             const formData = new FormData();
@@ -180,10 +182,13 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                 alert(`Gagal menghapus: ${result.error}`);
             } else {
                 alert('Rekomendasi berhasil dihapus.');
-                fetchAllData();
+                // --- AWAL PERBAIKAN 3 ---
+                // Ganti 'fetchAllData()' dengan 'router.refresh()'
+                router.refresh();
             }
         }
     };
+    // --- AKHIR PERBAIKAN ---
 
     const handleSave = async () => {
         setLoading(true);
