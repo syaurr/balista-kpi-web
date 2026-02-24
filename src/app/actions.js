@@ -555,7 +555,6 @@ export async function getDashboardData() {
 // import { cookies } from 'next/headers';
 
 export async function saveFullAssessment(formData) {
-    // 1. Tambahkan await (Penting untuk Next.js versi terbaru)
     const supabase = await createClient(); 
     
     const karyawanId = formData.get('karyawanId');
@@ -565,7 +564,7 @@ export async function saveFullAssessment(formData) {
 
     if (!karyawanId || !periode) return { error: 'Data tidak lengkap.' };
 
-    // --- 2. AMBIL ID PENILAI (Mendukung fitur Nyamar/Impersonate) ---
+    // --- AMBIL ID PENILAI ---
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) return { error: 'Sesi login tidak valid.' };
 
@@ -578,17 +577,15 @@ export async function saveFullAssessment(formData) {
 
     const { data: activePenilai } = await supabase.from('karyawan').select('id').eq('email', activeEmail.toLowerCase().trim()).single();
     if (!activePenilai) return { error: 'Gagal mengidentifikasi data penilai.' };
-    // ----------------------------------------------------------------
 
     const { data: kpis } = await supabase.from('kpi_master').select('id, kpi_deskripsi, bobot').in('id', Object.keys(scoresData));
     if (!kpis) return { error: 'Gagal mengambil data master KPI untuk snapshot.' };
 
-    // 3. SISIPKAN PENILAI_ID KE DALAM PAYLOAD
     const assessmentsToUpsert = kpis.map(kpi => ({
         karyawan_id: karyawanId, 
         kpi_master_id: kpi.id, 
         periode: periode, 
-        penilai_id: activePenilai.id, // <--- KUNCI AGAR DATA TIDAK NULL
+        penilai_id: activePenilai.id, 
         nilai: scoresData[kpi.id],
         tanggal_penilaian: new Date().toISOString(), 
         kpi_deskripsi: kpi.kpi_deskripsi, 
@@ -598,20 +595,21 @@ export async function saveFullAssessment(formData) {
     const summaryToUpsert = { 
         karyawan_id: karyawanId, 
         periode: periode, 
-        penilai_id: activePenilai.id, // <--- KUNCI AGAR DATA TIDAK NULL
-        catatan_kpi: generalNote 
+        penilai_id: activePenilai.id, 
+        catatan_kpi: generalNote || '' // Pastikan kalau kosong, tersimpan sebagai string kosong
     };
 
-    // 4. PROSES SIMPAN
-    // Hapus sementara onConflict jika struktur tabel belum punya constraint unique untuk penilai_id
-    // Supabase otomatis akan membaca Primary Key jika onConflict dihilangkan
+    // --- PERBAIKAN UTAMA: Tambahkan onConflict agar DB melakukan UPDATE, bukan INSERT ---
     const [assessmentResult, summaryResult] = await Promise.all([
-        supabase.from('penilaian_kpi').upsert(assessmentsToUpsert),
-        supabase.from('penilaian_summary').upsert(summaryToUpsert)
+        supabase.from('penilaian_kpi').upsert(assessmentsToUpsert, {
+            onConflict: 'karyawan_id, kpi_master_id, periode, penilai_id'
+        }),
+        supabase.from('penilaian_summary').upsert(summaryToUpsert, {
+            // Kita panggil langsung nama aturan yang error tadi!
+            onConflict: 'unique_summary_per_assessor' 
+        })
     ]);
     
-    // 5. DEBUGGING ERROR REAL-TIME
-    // Daripada bilang "Gagal menyimpan", kita tampilkan pesan asli dari Supabase!
     if (assessmentResult.error) {
         console.error("Error KPI DB:", assessmentResult.error);
         return { error: `Gagal simpan skor: ${assessmentResult.error.message}` };
@@ -623,9 +621,10 @@ export async function saveFullAssessment(formData) {
     }
     
     revalidatePath('/dashboard/admin/assessment');
-    revalidatePath('/dashboard'); // Sekalian revalidate dashboard My KPI
+    revalidatePath('/dashboard');
     return { success: 'Penilaian berhasil disimpan!' };
 }
+
 export async function addRecommendation(karyawanId, periode, text) {
     const supabase = createClient();
     const { error } = await supabase.from('kpi_summary_recommendations').insert({ karyawan_id: karyawanId, periode: periode, rekomendasi_text: text });
