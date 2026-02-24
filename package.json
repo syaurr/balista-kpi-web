@@ -24,7 +24,7 @@
     "daisyui": "^4.10.1",
     "eslint": "^9",
     "eslint-config-next": "15.4.5",
-    "next": "^15.5.4",
+    "next": "15.5.9",
     "postcss": "^8.4.38",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
