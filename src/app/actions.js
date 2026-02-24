@@ -598,15 +598,14 @@ export async function saveFullAssessment(formData) {
         penilai_id: activePenilai.id, 
         catatan_kpi: generalNote || '' // Pastikan kalau kosong, tersimpan sebagai string kosong
     };
-
-    // --- PERBAIKAN UTAMA: Tambahkan onConflict agar DB melakukan UPDATE, bukan INSERT ---
+  
     const [assessmentResult, summaryResult] = await Promise.all([
         supabase.from('penilaian_kpi').upsert(assessmentsToUpsert, {
             onConflict: 'karyawan_id, kpi_master_id, periode, penilai_id'
         }),
         supabase.from('penilaian_summary').upsert(summaryToUpsert, {
-            // Kita panggil langsung nama aturan yang error tadi!
-            onConflict: 'unique_summary_per_assessor' 
+            // Ini 3 pilar utama yang bikin datanya unik per penilai:
+            onConflict: 'karyawan_id, periode, penilai_id' 
         })
     ]);
     
