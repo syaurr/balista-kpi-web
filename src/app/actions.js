@@ -567,7 +567,6 @@ export async function saveFullAssessment(formData) {
     const { data: kpis } = await supabase.from('kpi_master').select('id, kpi_deskripsi, bobot').in('id', Object.keys(scoresData));
     if (!kpis) return { error: 'Gagal mengambil data master KPI untuk snapshot.' };
 
-    // KEMBALI KE PAYLOAD LAMA (Tanpa penilai_id)
     const assessmentsToUpsert = kpis.map(kpi => ({
         karyawan_id: karyawanId, 
         kpi_master_id: kpi.id, 
@@ -578,39 +577,57 @@ export async function saveFullAssessment(formData) {
         bobot: kpi.bobot
     }));
 
-    const summaryToUpsert = { 
-        karyawan_id: karyawanId, 
-        periode: periode, 
-        catatan_kpi: generalNote || '' 
-    };
-
-    // KEMBALI MENGGUNAKAN KOLOM ASLI BAWAAN SISTEM LAMA KAKAK
-    const [assessmentResult, summaryResult] = await Promise.all([
-        supabase.from('penilaian_kpi').upsert(assessmentsToUpsert, {
-            // Sebutkan 3 kolom yang bikin data ini unik
+    // 1. SIMPAN SKOR KPI (Ini sudah terbukti sukses dari percobaan Kakak barusan)
+    const { error: assessmentError } = await supabase
+        .from('penilaian_kpi')
+        .upsert(assessmentsToUpsert, {
             onConflict: 'karyawan_id, kpi_master_id, periode' 
-        }),
-        supabase.from('penilaian_summary').upsert(summaryToUpsert, {
-            // Sebutkan 2 kolom yang bikin catatan ini unik
-            onConflict: 'karyawan_id, periode' 
-        })
-    ]);
-    
-    if (assessmentResult.error) {
-        console.error("Error KPI DB:", assessmentResult.error);
-        return { error: `Gagal simpan skor: ${assessmentResult.error.message}` };
+        });
+
+    if (assessmentError) {
+        console.error("Error KPI DB:", assessmentError);
+        return { error: `Gagal simpan skor: ${assessmentError.message}` };
     }
-    
-    if (summaryResult.error) {
-        console.error("Error Summary DB:", summaryResult.error);
-        return { error: `Gagal simpan catatan: ${summaryResult.error.message}` };
+
+    // 2. SIMPAN CATATAN (Jalan Tikus Anti-Error Database)
+    // Kita cari tahu dulu, apakah catatannya udah ada?
+    const { data: existingSummary } = await supabase
+        .from('penilaian_summary')
+        .select('id')
+        .eq('karyawan_id', karyawanId)
+        .eq('periode', periode)
+        .maybeSingle();
+
+    let summaryError;
+
+    if (existingSummary) {
+        // Kalau catatannya udah ada, langsung kita UPDATE pakai ID-nya
+        const { error } = await supabase
+            .from('penilaian_summary')
+            .update({ catatan_kpi: generalNote || '' })
+            .eq('id', existingSummary.id);
+        summaryError = error;
+    } else {
+        // Kalau catatannya belum ada, kita BIKIN BARU (INSERT)
+        const { error } = await supabase
+            .from('penilaian_summary')
+            .insert({
+                karyawan_id: karyawanId, 
+                periode: periode, 
+                catatan_kpi: generalNote || ''
+            });
+        summaryError = error;
     }
-    
+
+    if (summaryError) {
+        console.error("Error Summary DB:", summaryError);
+        return { error: `Gagal simpan catatan: ${summaryError.message}` };
+    }
+
     revalidatePath('/dashboard/admin/assessment');
     revalidatePath('/dashboard');
     return { success: 'Penilaian berhasil disimpan!' };
 }
-
 export async function addRecommendation(karyawanId, periode, text) {
     const supabase = createClient();
     const { error } = await supabase.from('kpi_summary_recommendations').insert({ karyawan_id: karyawanId, periode: periode, rekomendasi_text: text });
