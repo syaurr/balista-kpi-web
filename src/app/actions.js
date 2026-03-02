@@ -601,10 +601,11 @@ export async function saveFullAssessment(formData) {
   
     const [assessmentResult, summaryResult] = await Promise.all([
         supabase.from('penilaian_kpi').upsert(assessmentsToUpsert, {
-            onConflict: 'karyawan_id, kpi_master_id, periode, penilai_id'
+            // --- GANTI BARIS INI DENGAN NAMA ATURAN ASLINYA ---
+            onConflict: 'unique_karyawan_kpi_periode' 
         }),
         supabase.from('penilaian_summary').upsert(summaryToUpsert, {
-            // Ini 3 pilar utama yang bikin datanya unik per penilai:
+            // Biarkan ini kalau kemarin sudah tidak error
             onConflict: 'karyawan_id, periode, penilai_id' 
         })
     ]);
