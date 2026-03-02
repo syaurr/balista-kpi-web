@@ -564,28 +564,14 @@ export async function saveFullAssessment(formData) {
 
     if (!karyawanId || !periode) return { error: 'Data tidak lengkap.' };
 
-    // --- AMBIL ID PENILAI ---
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return { error: 'Sesi login tidak valid.' };
-
-    const cookieStore = await cookies();
-    let impersonateEmailRaw = cookieStore.get('impersonate_email')?.value;
-    const impersonateEmail = impersonateEmailRaw ? impersonateEmailRaw.replace(/^["'](.*)["']$/, '$1').replace(/^"|"$/g, '').trim() : null;
-
-    const { data: realUser } = await supabase.from('karyawan').select('role').eq('email', authUser.email).single();
-    const activeEmail = (realUser?.role === 'Admin' && impersonateEmail) ? impersonateEmail : authUser.email;
-
-    const { data: activePenilai } = await supabase.from('karyawan').select('id').eq('email', activeEmail.toLowerCase().trim()).single();
-    if (!activePenilai) return { error: 'Gagal mengidentifikasi data penilai.' };
-
     const { data: kpis } = await supabase.from('kpi_master').select('id, kpi_deskripsi, bobot').in('id', Object.keys(scoresData));
     if (!kpis) return { error: 'Gagal mengambil data master KPI untuk snapshot.' };
 
+    // KEMBALI KE PAYLOAD LAMA (Tanpa penilai_id)
     const assessmentsToUpsert = kpis.map(kpi => ({
         karyawan_id: karyawanId, 
         kpi_master_id: kpi.id, 
         periode: periode, 
-        penilai_id: activePenilai.id, 
         nilai: scoresData[kpi.id],
         tanggal_penilaian: new Date().toISOString(), 
         kpi_deskripsi: kpi.kpi_deskripsi, 
@@ -595,18 +581,18 @@ export async function saveFullAssessment(formData) {
     const summaryToUpsert = { 
         karyawan_id: karyawanId, 
         periode: periode, 
-        penilai_id: activePenilai.id, 
-        catatan_kpi: generalNote || '' // Pastikan kalau kosong, tersimpan sebagai string kosong
+        catatan_kpi: generalNote || '' 
     };
-  
+
+    // KEMBALI MENGGUNAKAN ATURAN LAMA AGAR BISA DI-EDIT (UPDATE)
     const [assessmentResult, summaryResult] = await Promise.all([
         supabase.from('penilaian_kpi').upsert(assessmentsToUpsert, {
-            // --- GANTI BARIS INI DENGAN NAMA ATURAN ASLINYA ---
+            // Gunakan nama aturan yang tadi muncul di error Kakak
             onConflict: 'unique_karyawan_kpi_periode' 
         }),
         supabase.from('penilaian_summary').upsert(summaryToUpsert, {
-            // Biarkan ini kalau kemarin sudah tidak error
-            onConflict: 'karyawan_id, periode, penilai_id' 
+            // Gunakan kolom asli bawaan sistem lama Kakak
+            onConflict: 'karyawan_id, periode' 
         })
     ]);
     
