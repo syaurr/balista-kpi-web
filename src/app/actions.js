@@ -584,14 +584,14 @@ export async function saveFullAssessment(formData) {
         catatan_kpi: generalNote || '' 
     };
 
-    // KEMBALI MENGGUNAKAN ATURAN LAMA AGAR BISA DI-EDIT (UPDATE)
+    // KEMBALI MENGGUNAKAN KOLOM ASLI BAWAAN SISTEM LAMA KAKAK
     const [assessmentResult, summaryResult] = await Promise.all([
         supabase.from('penilaian_kpi').upsert(assessmentsToUpsert, {
-            // Gunakan nama aturan yang tadi muncul di error Kakak
-            onConflict: 'unique_karyawan_kpi_periode' 
+            // Sebutkan 3 kolom yang bikin data ini unik
+            onConflict: 'karyawan_id, kpi_master_id, periode' 
         }),
         supabase.from('penilaian_summary').upsert(summaryToUpsert, {
-            // Gunakan kolom asli bawaan sistem lama Kakak
+            // Sebutkan 2 kolom yang bikin catatan ini unik
             onConflict: 'karyawan_id, periode' 
         })
     ]);
