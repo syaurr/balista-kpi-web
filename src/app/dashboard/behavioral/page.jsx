@@ -5,7 +5,7 @@ import BehavioralDashboardClient from '../../../components/BehavioralDashboardCl
 export default async function BehavioralDashboardPage({ searchParams }) {
     // Cari semua periode penilaian yang pernah ada untuk ditampilkan di dropdown
     const { createClient } = await import('../../../utils/supabase/server');
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: allPeriods } = await supabase.from('assessment_periods').select('nama_periode').order('start_date', { ascending: false });
 
     // Tentukan periode aktif, fallback ke periode terbaru jika tidak ada di URL

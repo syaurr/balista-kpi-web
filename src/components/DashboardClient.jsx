@@ -127,7 +127,7 @@ function KpiHistoryChart({ kpiHistory }) {
 
 export default function DashboardClient({ user, initialData, initialMonth, initialYear, karyawanId, periode }) {
     const router = useRouter();
-    const { rekap, areaScores, recommendations, summary, recommendedTrainings, pendingTaskCount, behavioralScores, kpiHistory } = initialData;
+    const { rekap, areaScores, recommendations, summary, recommendedTrainings, pendingTaskCount, behavioralScores, kpiHistory, transparencyData } = initialData;
 
     const [month, setMonth] = useState(initialMonth);
     const [year, setYear] = useState(initialYear);
@@ -180,6 +180,26 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
         value: (i + 1).toString(),
         label: new Date(0, i).toLocaleString('id-ID', { month: 'long' })
     }));
+
+    // Logika di dalam useMemo DashboardClient atau AssessmentClient
+    const assessmentStatus = useMemo(() => {
+        // Ambil data rekap dari initialData
+        const scores = initialData?.rekap || [];
+        
+        const gapAnalysis = scores.map(item => {
+            return {
+                ...item,
+                // Kita gunakan data 'gap' yang sekarang sudah dikirim oleh RPC SQL terbaru kita
+                gap: item.gap || 0, 
+                status: (item.gap > 10) ? 'conflict' : 'ok'
+            };
+        });
+
+        const hasConflict = gapAnalysis.some(item => item.status === 'conflict');
+        return { gapAnalysis, hasConflict };
+        
+        // Cukup pantau initialData saja
+    }, [initialData]);
 
     return (
         <div>
@@ -267,7 +287,9 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                 <div className="bg-white p-6 rounded-xl shadow-md">
                     <h3 className="text-lg font-bold text-[#6b1815] mb-3">Catatan Umum dari Penilai</h3>
-                    <p className="text-gray-600 italic">{summary.catatan_kpi}</p>
+                    <div className="whitespace-pre-wrap break-words leading-relaxed text-gray-700">
+                        {summary?.catatan_kpi || 'Belum ada catatan.'}
+                    </div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-md">
                     <h3 className="text-lg font-bold text-[#6b1815] mb-3">Rekomendasi Pengembangan</h3>
@@ -318,6 +340,18 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
                         setSelectedTrainingDetail(null); // Tutup modal setelah aksi
                     }}
                 />
+            )}
+
+            {assessmentStatus.hasConflict && (
+                <div className="alert alert-error shadow-lg mb-6 border-2 border-red-600 bg-red-50">
+                    <div>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current flex-shrink-0 h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span className="font-bold text-red-800">
+                            PERHATIAN: Terdeteksi selisih nilai {'>'} 10% antara Assessor 1 dan 2 pada beberapa KPI. 
+                            Harap diskusikan kembali hingga selisih mengecil.
+                        </span>
+                    </div>
+                </div>
             )}
         </div>
     );

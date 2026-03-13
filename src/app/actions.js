@@ -1,5 +1,6 @@
 'use server';
-
+'use server';
+import { cookies } from 'next/headers';
 // --- AWAL PERBAIKAN: Perbaiki path import ---
 import { createClient } from '../utils/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -8,74 +9,89 @@ import * as XLSX from 'xlsx';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 // --- AKHIR PERBAIKAN ---
 
+
 export async function getDashboardPageData(periode) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { user: null, data: null, error: 'User not authenticated' };
 
-  // --- AWAL PERBAIKAN ---
-  // Pastikan kita juga mengambil 'tipe_akun' agar 'page.jsx' bisa memeriksanya
-  const { data: karyawan, error: userError } = await supabase
-    .from('karyawan').select('id, nama, posisi, role, tipe_akun') // <-- 'tipe_akun' DITAMBAHKAN DI SINI
-    .eq('email', user.email)
-    .single();
-  // --- AKHIR PERBAIKAN ---
-
+  const { data: karyawan } = await supabase.from('karyawan').select('id, nama, posisi, role, tipe_akun').eq('email', user.email).single();
   if (!karyawan) return { user: null, data: null, error: 'Failed to fetch user profile.' };
 
   const karyawanId = karyawan.id;
-  
-  // Ambil ID periode dari nama periode
   const { data: currentPeriod } = await supabase.from('assessment_periods').select('id').eq('nama_periode', periode).single();
   const periodId = currentPeriod?.id;
 
   const [
-    rekapResult, 
-    areaScoresResult, 
-    recommendationsResult, 
-    summaryResult,
-    recommendedTrainingsResult,
-    pendingTasksResult,
-    behavioralScoresResult,
-    kpiHistoryResult
+    rekapResult, areaScoresResult, recommendationsResult, summaryResult,
+    recommendedTrainingsResult, pendingTasksResult, behavioralScoresResult,
+    kpiHistoryResult, 
+    rawDetailScoresResult // <--- 1. Query Transparansi
   ] = await Promise.all([
     supabase.rpc('get_rekap_kpi_data', { p_karyawan_id: karyawanId, p_posisi: karyawan.posisi, p_periode: periode }),
     supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
     supabase.from('kpi_summary_recommendations').select('rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
-    supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single(),
-    supabase.from('karyawan_training_plan')
-            .select('id, training_programs(*, training_area_link(area_name))') // Query ini sudah diperbaiki sebelumnya
-            .eq('karyawan_id', karyawanId)
-            .eq('periode', periode)
-            .eq('status', 'Disarankan'),
-    supabase.from('behavioral_assessors')
-            .select('id, behavioral_results(id), period:assessment_periods!inner(status)')
-            .eq('assessor_id', karyawanId)
-            .eq('period.status', 'Open'),
+    supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode),
+    supabase.from('karyawan_training_plan').select('id, training_programs(*, training_area_link(area_name))').eq('karyawan_id', karyawanId).eq('periode', periode).eq('status', 'Disarankan'),
+    supabase.from('behavioral_assessors').select('id, behavioral_results(id), period:assessment_periods!inner(status)').eq('assessor_id', karyawanId).eq('period.status', 'Open'),
     periodId ? supabase.rpc('calculate_behavioral_score', { p_employee_id: karyawanId, p_period_id: periodId }) : Promise.resolve({ data: [] }),
-    supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId })
+    supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId }),
+    
+    // <--- 2. Ambil detail nilai per penilai
+    supabase.from('penilaian_kpi').select('kpi_master_id, kpi_deskripsi, bobot, nilai, penilai:karyawan!penilai_id(nama)').eq('karyawan_id', karyawanId).eq('periode', periode)
   ]);
 
   const pendingTaskCount = pendingTasksResult.data?.filter(task => task.behavioral_results.length === 0).length || 0;
+  const combinedSummary = summaryResult.data?.map(s => s.catatan_kpi).filter(Boolean).join('\n\n---\n\n') || `Belum ada catatan umum untuk periode ${periode}.`;
+
+  // <--- 3. LOGIKA MERAKIT DATA TRANSPARANSI --->
+  const detailMap = {};
+  rawDetailScoresResult.data?.forEach(item => {
+      if (!detailMap[item.kpi_master_id]) {
+          detailMap[item.kpi_master_id] = {
+              deskripsi: item.kpi_deskripsi,
+              bobot: item.bobot,
+              penilai1_nama: item.penilai?.nama || 'Anonim',
+              penilai1_nilai: item.nilai,
+              penilai2_nama: null,
+              penilai2_nilai: null
+          };
+      } else {
+          detailMap[item.kpi_master_id].penilai2_nama = item.penilai?.nama || 'Anonim';
+          detailMap[item.kpi_master_id].penilai2_nilai = item.nilai;
+      }
+  });
+
+  const transparencyData = Object.values(detailMap).map(kpi => {
+      let rataRata = kpi.penilai1_nilai;
+      if (kpi.penilai2_nilai !== null) {
+          rataRata = (kpi.penilai1_nilai + kpi.penilai2_nilai) / 2;
+      }
+      return { 
+          ...kpi, 
+          rata_rata: rataRata, 
+          nilai_akhir: rataRata * (kpi.bobot / 100) // Detail perhitungan di belakang layar
+      };
+  });
 
   return {
-    user: karyawan, // <-- Sekarang objek 'karyawan' ini sudah berisi 'tipe_akun'
+    user: karyawan,
     data: {
       rekap: rekapResult.data || [],
       areaScores: areaScoresResult.data || [],
       recommendations: recommendationsResult.data || [],
-      summary: summaryResult.data || { catatan_kpi: `Belum ada catatan umum untuk periode ${periode}.` },
+      summary: { catatan_kpi: combinedSummary },
       recommendedTrainings: recommendedTrainingsResult.data || [],
       pendingTaskCount: pendingTaskCount,
       behavioralScores: behavioralScoresResult.data || [],
-      kpiHistory: kpiHistoryResult.data || []
+      kpiHistory: kpiHistoryResult.data || [],
+      transparencyData: transparencyData // <--- 4. Kirim ke Frontend
     },
     error: null,
   };
 }
-
 export async function enrollInTraining(trainingId, periode) { // <-- Terima 'periode' sebagai parameter
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'Anda harus login.' };
 
@@ -110,7 +126,7 @@ export async function enrollInTraining(trainingId, periode) { // <-- Terima 'per
 // Di dalam file: src/app/actions.js
 
 export async function addTrainingProgram(formData) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'Anda harus login.' };
 
@@ -164,7 +180,7 @@ export async function addTrainingProgram(formData) {
 
 
 export async function updateTrainingProgram(formData) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const programId = formData.get('id');
     const linked_areas = formData.getAll('linked_areas');
 
@@ -206,7 +222,7 @@ export async function updateTrainingProgram(formData) {
 // --- FUNGSI BARU UNTUK PERSETUJUAN OLEH ADMIN ---
 
 export async function approveTraining(trainingId) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error } = await supabase
         .from('training_programs')
         .update({ status: 'Akan Datang' })
@@ -218,7 +234,7 @@ export async function approveTraining(trainingId) {
 }
 
 export async function rejectTraining(trainingId) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error } = await supabase
         .from('training_programs')
         .update({ status: 'Ditolak' })
@@ -231,7 +247,7 @@ export async function rejectTraining(trainingId) {
 }
 
 export async function deleteTrainingProgram(formData) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const id = formData.get('id');
     const { error } = await supabase.from('training_programs').delete().eq('id', id);
     if (error) {
@@ -243,7 +259,7 @@ export async function deleteTrainingProgram(formData) {
 }
 
 export async function importFromExcel(formData) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const file = formData.get('excelFile');
     if (!file || file.size === 0) {
         return { error: 'File tidak ditemukan.' };
@@ -259,7 +275,7 @@ export async function importFromExcel(formData) {
             return { error: 'File Excel kosong atau formatnya salah.' };
         }
 
-        const supabase = createClient(cookies());
+        const supabase = await createClient();
         
         const programsToInsert = data.map(row => {
             const parseDate = (dateValue) => {
@@ -298,7 +314,7 @@ export async function importFromExcel(formData) {
 }
 
 export async function fetchKpiDetailsForArea(karyawanId, periode, areaName) {
-    const supabase = createClient();
+    const supabase = await createClient();
     if (!karyawanId || !periode || !areaName) {
         return { data: [], error: 'Parameter tidak lengkap.' };
     }
@@ -327,7 +343,7 @@ export async function fetchKpiDetailsForArea(karyawanId, periode, areaName) {
 }
 
 export async function fetchAreaNote(karyawanId, periode, areaName) {
-    const supabase = createClient();
+    const supabase = await createClient();
     if (!karyawanId || !periode || !areaName) {
         return { note: '', error: 'Parameter tidak lengkap.' };
     }
@@ -347,7 +363,7 @@ export async function fetchAreaNote(karyawanId, periode, areaName) {
 }
 
 export async function saveAreaNote(karyawanId, periode, areaName, noteText) {
-    const supabase = createClient();
+    const supabase = await createClient();
     if (!karyawanId || !periode || !areaName) {
         return { success: null, error: 'Data tidak lengkap.' };
     }
@@ -367,7 +383,7 @@ export async function saveAreaNote(karyawanId, periode, areaName, noteText) {
 }
 
 export async function addOrUpdateKpi(formData) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const id = formData.get('id');
     const linksString = formData.get('referensi_links');
 
@@ -436,7 +452,7 @@ export async function addOrUpdateKpi(formData) {
 }
 
 export async function deactivateKpi(formData) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const id = formData.get('id');
     const { error } = await supabase.from('kpi_master').update({ is_active: false }).eq('id', id);
     if (error) {
@@ -480,55 +496,169 @@ export async function getAssessmentDataLogic(supabase, karyawanId, periode) {
     return finalResult;
 }
 
-// Di dalam file: src/app/actions.js
+// src/app/actions.js
+
+// src/app/actions.js
 
 export async function fetchAssessmentData(karyawanId, periode) {
-    const supabase = createClient();
-    if (!karyawanId || !periode) {
-        return { kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [], kpiHistory: [] };
-    }
+    const supabase = await createClient();
+    if (!karyawanId || !periode) return null;
 
-    const { data: karyawan } = await supabase.from('karyawan').select('posisi').eq('id', karyawanId).single();
-    if (!karyawan) {
-        return { kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [], kpiHistory: [] };
-    }
+    // 1. Ambil KTP Penilai yang sedang buka halaman ini
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return null;
+
+    const cookieStore = await cookies();
+    let impersonateEmailRaw = cookieStore.get('impersonate_email')?.value;
+    const impersonateEmail = impersonateEmailRaw ? impersonateEmailRaw.replace(/^["'](.*)["']$/, '$1').replace(/^"|"$/g, '').trim() : null;
+
+    const { data: realUser } = await supabase.from('karyawan').select('role').eq('email', authUser.email).single();
+    const activeEmail = (realUser?.role === 'Admin' && impersonateEmail) ? impersonateEmail : authUser.email;
+
+    const { data: activePenilai } = await supabase.from('karyawan').select('id').eq('email', activeEmail.toLowerCase().trim()).single();
+    if (!activePenilai) return null;
+
+    // 2. Ambil Master KPI
+    const { data: targetKaryawan } = await supabase.from('karyawan').select('posisi').eq('id', karyawanId).single();
+    if (!targetKaryawan) return null;
+
+    const { data: kpis } = await supabase.from('kpi_master').select('*').eq('posisi', targetKaryawan.posisi).eq('is_active', true).order('area');
+
+    // 3. FILTER "MATA PENUTUP" (Hanya ambil nilainya sendiri, ATAU nilai lama yang penilai_id-nya null)
+    const penilaiFilter = `penilai_id.eq.${activePenilai.id},penilai_id.is.null`;
 
     const [
-        kpisResult, 
         scoresResult, 
         summaryResult, 
         recommendationsResult, 
-        areaScoresResult,
-        kpiHistoryResult // <-- TAMBAHAN BARU
+        areaScoresResult, 
+        historyResult
     ] = await Promise.all([
-        supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', karyawan.posisi).eq('is_active', true).order('area_kerja'),
-        supabase.from('penilaian_kpi').select('kpi_master_id, nilai').eq('karyawan_id', karyawanId).eq('periode', periode),
-        supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single(),
+        supabase.from('penilaian_kpi').select('kpi_master_id, nilai').eq('karyawan_id', karyawanId).eq('periode', periode).or(penilaiFilter),
+        supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).or(penilaiFilter).limit(1).maybeSingle(),
+        
+        // --- KUNCI FIX REKOMENDASI: Jangan pakai .or(penilaiFilter) di baris ini! ---
         supabase.from('kpi_summary_recommendations').select('id, rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
+        // ----------------------------------------------------------------------------
+        
         supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
-        // --- PANGGILAN BARU: Ambil data riwayat untuk karyawan yang dipilih ---
         supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId })
     ]);
-    
-    if (kpisResult.error) console.error("KPI Fetch Error:", kpisResult.error);
 
-    const scoresMap = scoresResult.data?.reduce((acc, score) => {
-        acc[score.kpi_master_id] = score.nilai;
-        return acc;
-    }, {}) || {};
+    const scoresMap = {};
+    scoresResult.data?.forEach(s => { scoresMap[s.kpi_master_id] = s.nilai; });
+
+    const { data: allScoresForGap } = await supabase
+        .from('penilaian_kpi')
+        .select('kpi_master_id, kpi_deskripsi, nilai, penilai_id')
+        .eq('karyawan_id', karyawanId)
+        .eq('periode', periode);
+
+    const gapWarnings = [];
+    if (allScoresForGap && allScoresForGap.length > 0) {
+        // Kelompokkan nilai berdasarkan KPI
+        const scoresByKpi = {};
+        allScoresForGap.forEach(s => {
+            if (!scoresByKpi[s.kpi_master_id]) scoresByKpi[s.kpi_master_id] = { deskripsi: s.kpi_deskripsi, scores: [] };
+            scoresByKpi[s.kpi_master_id].scores.push(s.nilai);
+        });
+
+        // Cek jika ada KPI yang dinilai oleh >= 2 orang, apakah selisih Max dan Min > 20
+        Object.values(scoresByKpi).forEach(kpi => {
+            if (kpi.scores.length > 1) {
+                const maxScore = Math.max(...kpi.scores);
+                const minScore = Math.min(...kpi.scores);
+                if ((maxScore - minScore) >= 20) {
+                    gapWarnings.push(kpi.deskripsi);
+                }
+            }
+        });
+    }
+    // ------------------------------------
 
     return {
-        kpis: kpisResult.data || [],
+        kpis: kpis || [],
         scores: scoresMap,
-        generalNote: summaryResult.data?.catatan_kpi || '',
+        generalNote: summaryResult.data?.catatan_kpi || '', 
         recommendations: recommendationsResult.data || [],
         areaScores: areaScoresResult.data || [],
-        kpiHistory: kpiHistoryResult.data || [] // <-- KIRIM DATA BARU
+        kpiHistory: historyResult.data || [],
+        gapWarnings: gapWarnings, // <-- KIRIM PERINGATAN KE UI
+        isDataFound: (scoresResult.data?.length || 0) > 0
     };
 }
 
+// src/app/actions.js
+
+export async function saveFullAssessment(formData) {
+    const supabase = await createClient(); 
+    
+    const karyawanId = formData.get('karyawanId');
+    const periode = formData.get('periode');
+    const scoresData = JSON.parse(formData.get('scores'));
+    const generalNote = formData.get('generalNote');
+
+    if (!karyawanId || !periode) return { error: 'Data tidak lengkap.' };
+
+    // 1. DETEKSI SIAPA YANG MENILAI (Dukung fitur Nyamar/Impersonate)
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return { error: 'Sesi login tidak valid.' };
+
+    const cookieStore = await cookies();
+    let impersonateEmailRaw = cookieStore.get('impersonate_email')?.value;
+    const impersonateEmail = impersonateEmailRaw ? impersonateEmailRaw.replace(/^["'](.*)["']$/, '$1').replace(/^"|"$/g, '').trim() : null;
+
+    const { data: realUser } = await supabase.from('karyawan').select('role').eq('email', authUser.email).single();
+    const activeEmail = (realUser?.role === 'Admin' && impersonateEmail) ? impersonateEmail : authUser.email;
+
+    const { data: activePenilai } = await supabase.from('karyawan').select('id').eq('email', activeEmail.toLowerCase().trim()).single();
+    if (!activePenilai) return { error: 'Gagal mengidentifikasi data penilai.' };
+
+    const { data: kpis } = await supabase.from('kpi_master').select('id, kpi_deskripsi, bobot').in('id', Object.keys(scoresData));
+    if (!kpis) return { error: 'Gagal mengambil data master KPI untuk snapshot.' };
+
+    // 2. MASUKKAN PENILAI_ID KE DALAM DATA
+    const assessmentsToUpsert = kpis.map(kpi => ({
+        karyawan_id: karyawanId, 
+        kpi_master_id: kpi.id, 
+        periode: periode, 
+        penilai_id: activePenilai.id, // <--- KUNCI PEMISAH KURSI
+        nilai: scoresData[kpi.id],
+        tanggal_penilaian: new Date().toISOString(), 
+        kpi_deskripsi: kpi.kpi_deskripsi, 
+        bobot: kpi.bobot
+    }));
+
+    const summaryToUpsert = { 
+        karyawan_id: karyawanId, 
+        periode: periode, 
+        penilai_id: activePenilai.id, // <--- KUNCI PEMISAH KURSI
+        catatan_kpi: generalNote || '' 
+    };
+
+    // 3. SIMPAN DENGAN ATURAN BARU
+    // 3. SIMPAN DENGAN MENYEBUTKAN NAMA KOLOM (Bukan nama Aturan)
+    const [assessmentResult, summaryResult] = await Promise.all([
+        supabase.from('penilaian_kpi').upsert(assessmentsToUpsert, {
+            // Sebutkan 4 pilar yang bikin datanya unik:
+            onConflict: 'karyawan_id, kpi_master_id, periode, penilai_id' 
+        }),
+        supabase.from('penilaian_summary').upsert(summaryToUpsert, {
+            // Sebutkan 3 pilar yang bikin catatannya unik:
+            onConflict: 'karyawan_id, periode, penilai_id' 
+        })
+    ]);
+    
+    if (assessmentResult.error) return { error: `Gagal simpan skor: ${assessmentResult.error.message}` };
+    if (summaryResult.error) return { error: `Gagal simpan catatan: ${summaryResult.error.message}` };
+    
+    revalidatePath('/dashboard/admin/assessment');
+    revalidatePath('/dashboard');
+    return { success: 'Penilaian berhasil disimpan!' };
+}
+
 export async function getDashboardData() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'User not authenticated' };
   const { data: karyawan, error: userError } = await supabase.from('karyawan').select('id, nama, posisi, role').eq('email', user.email).single();
@@ -550,44 +680,42 @@ export async function getDashboardData() {
   };
 }
 
-export async function saveFullAssessment(formData) {
-    const supabase = createClient();
-    const karyawanId = formData.get('karyawanId');
-    const periode = formData.get('periode');
-    const scoresData = JSON.parse(formData.get('scores'));
-    const generalNote = formData.get('generalNote');
-
-    if (!karyawanId || !periode) return { error: 'Data tidak lengkap.' };
-
-    const { data: kpis } = await supabase.from('kpi_master').select('id, kpi_deskripsi, bobot').in('id', Object.keys(scoresData));
-    if (!kpis) return { error: 'Gagal mengambil data master KPI untuk snapshot.' };
-
-    const assessmentsToUpsert = kpis.map(kpi => ({
-        karyawan_id: karyawanId, kpi_master_id: kpi.id, periode: periode, nilai: scoresData[kpi.id],
-        tanggal_penilaian: new Date().toISOString(), kpi_deskripsi: kpi.kpi_deskripsi, bobot: kpi.bobot
-    }));
-    const summaryToUpsert = { karyawan_id: karyawanId, periode: periode, catatan_kpi: generalNote };
-
-    const [assessmentResult, summaryResult] = await Promise.all([
-        supabase.from('penilaian_kpi').upsert(assessmentsToUpsert, { onConflict: 'karyawan_id, kpi_master_id, periode' }),
-        supabase.from('penilaian_summary').upsert(summaryToUpsert, { onConflict: 'karyawan_id, periode' })
-    ]);
-    
-    if (assessmentResult.error || summaryResult.error) return { error: 'Gagal menyimpan penilaian.' };
-    
-    revalidatePath('/dashboard/admin/assessment');
-    return { success: 'Penilaian berhasil disimpan!' };
-}
-
 export async function addRecommendation(karyawanId, periode, text) {
-    const supabase = createClient();
-    const { error } = await supabase.from('kpi_summary_recommendations').insert({ karyawan_id: karyawanId, periode: periode, rekomendasi_text: text });
-    if (error) return { error: 'Gagal menambah rekomendasi.' };
-    revalidatePath('/dashboard/admin/assessment');
+    const supabase = await createClient();
+    
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return { error: 'Sesi login tidak valid.' };
+
+    const cookieStore = await cookies();
+    let impersonateEmailRaw = cookieStore.get('impersonate_email')?.value;
+    const impersonateEmail = impersonateEmailRaw ? impersonateEmailRaw.replace(/^["'](.*)["']$/, '$1').replace(/^"|"$/g, '').trim() : null;
+
+    const { data: realUser } = await supabase.from('karyawan').select('role').eq('email', authUser.email).single();
+    const activeEmail = (realUser?.role === 'Admin' && impersonateEmail) ? impersonateEmail : authUser.email;
+
+    const { data: activePenilai } = await supabase.from('karyawan').select('id').eq('email', activeEmail.toLowerCase().trim()).single();
+
+    if (!activePenilai) return { error: 'Gagal mengidentifikasi penilai.' };
+
+    const { error } = await supabase.from('kpi_summary_recommendations').insert({ 
+        karyawan_id: karyawanId, 
+        periode: periode, 
+        penilai_id: activePenilai.id, 
+        rekomendasi_text: text 
+    });
+    
+    if (error) {
+        console.error("DB Error Add Recommendation:", error);
+        return { error: `Gagal dari DB: ${error.message}` }; // Kirim error asli ke web
+    }
+    
+    // --- KUNCI FIX: Sapu jagat semua cache di dalam /dashboard ---
+    revalidatePath('/dashboard', 'layout'); 
+    return { success: 'Rekomendasi berhasil ditambahkan.' };
 }
 
 export async function updateRecommendation(formData) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const id = formData.get('id');
     const newText = formData.get('rekomendasi_text');
 
@@ -598,16 +726,14 @@ export async function updateRecommendation(formData) {
         .update({ rekomendasi_text: newText })
         .eq('id', id);
 
-    if (error) {
-        console.error('Update recommendation error:', error);
-        return { error: 'Gagal memperbarui rekomendasi.' };
-    }
-    revalidatePath('/dashboard/admin/assessment');
+    if (error) return { error: `Gagal memperbarui: ${error.message}` };
+
+    revalidatePath('/dashboard', 'layout'); // Sapu jagat cache
     return { success: 'Rekomendasi berhasil diperbarui.' };
 }
 
 export async function deleteRecommendation(formData) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const id = formData.get('id');
 
     if (!id) return { error: 'ID tidak ditemukan.' };
@@ -617,11 +743,9 @@ export async function deleteRecommendation(formData) {
         .delete()
         .eq('id', id);
 
-    if (error) {
-        console.error('Delete recommendation error:', error);
-        return { error: 'Gagal menghapus rekomendasi.' };
-    }
-    revalidatePath('/dashboard/admin/assessment');
+    if (error) return { error: `Gagal menghapus: ${error.message}` };
+
+    revalidatePath('/dashboard', 'layout'); // Sapu jagat cache
     return { success: 'Rekomendasi berhasil dihapus.' };
 }
 
@@ -632,7 +756,7 @@ export async function deleteRecommendation(formData) {
  * @param {string} newStatus - Status baru ('Sedang Berjalan', 'Menunggu Verifikasi', 'Selesai').
  */
 export async function updateTrainingPlanStatus(planId, newStatus) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error } = await supabase
         .from('karyawan_training_plan')
         .update({ status: newStatus })
@@ -652,7 +776,7 @@ export async function updateTrainingPlanStatus(planId, newStatus) {
  */
 
 async function awardXpAndCheckBadges(karyawanId, xpAmount) {
-    const supabase = createClient();
+    const supabase = await createClient();
     // Fungsi ini sekarang akan dipanggil dengan ID Karyawan yang benar, bukan ID Auth
     const { error } = await supabase.rpc('award_xp_and_update_level', {
         p_user_id: karyawanId, // p_user_id sekarang merujuk ke karyawan.id
@@ -662,7 +786,7 @@ async function awardXpAndCheckBadges(karyawanId, xpAmount) {
 }
 
 export async function addTrainingProgress(planId, deskripsi, fileUrl) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     // 1. Ambil ID Karyawan yang benar dari rencana training
     const { data: planData } = await supabase.from('karyawan_training_plan').select('karyawan_id').eq('id', planId).single();
@@ -684,7 +808,7 @@ export async function addTrainingProgress(planId, deskripsi, fileUrl) {
 }
 
 export async function verifyTrainingCompletion(planId) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const { data: plan } = await supabase.from('karyawan_training_plan').select('karyawan_id').eq('id', planId).single();
     if (!plan) return { error: "Rencana training tidak ditemukan." };
@@ -701,7 +825,7 @@ export async function verifyTrainingCompletion(planId) {
 }
 
 export async function submitTrainingFeedback(formData) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const planId = formData.get('planId');
     const rating = parseInt(formData.get('rating'), 10);
     const komentar = formData.get('komentar');
@@ -731,6 +855,8 @@ export async function submitTrainingFeedback(formData) {
  * berdasarkan kinerja mereka pada periode tertentu.
  * @param {string} periode - Periode yang akan dianalisis, misal: "Agustus 2025"
  */
+// Di dalam file: src/app/actions.js
+
 export async function generateTrainingRecommendations(periode) {
     console.log(`--- Memulai proses pembuatan rekomendasi untuk periode: ${periode} ---`);
     
@@ -743,15 +869,18 @@ export async function generateTrainingRecommendations(periode) {
     const { data: employees, error: empError } = await supabaseAdmin
         .from('karyawan')
         .select('id, nama, posisi')
-        .neq('tipe_akun', 'Admin Non-Penilaian'); // <-- KECUALIKAN TIPE AKUN KHUSUS
-
-    if (empError) return { error: "Gagal mengambil data karyawan." };
+        .neq('tipe_akun', 'Admin Non-Penilaian');
+        
+    if (empError) {
+        console.error("Gagal mengambil data karyawan:", empError);
+        return { error: "Gagal mengambil data karyawan." };
+    }
 
     let recommendationsCreated = 0;
     let details = [];
     
     for (const employee of employees) {
-        console.log(`\nMenganalisis karyawan: ${employee.nama}`);
+        console.log(`\nMenganalisis karyawan: ${employee.nama} (Posisi: ${employee.posisi})`);
 
         const { data: areaScores, error: scoreError } = await supabaseAdmin.rpc(
             'get_average_scores_by_area', 
@@ -763,33 +892,47 @@ export async function generateTrainingRecommendations(periode) {
             continue;
         }
         
-        // --- AWAL PERBAIKAN UTAMA ---
-        // Urutkan dengan benar: bandingkan skor 'a' dengan skor 'b'
         const lowestArea = areaScores
             .filter(s => s.average_score > 0)
             .sort((a, b) => a.average_score - b.average_score)[0];
-        // --- AKHIR PERBAIKAN UTAMA ---
         
         if (!lowestArea) {
             console.log(` -> Semua skor area adalah 0. Karyawan dilewati.`);
             continue;
         }
-        console.log(` -> Area terendah ditemukan: "${lowestArea.area}" (Skor: ${lowestArea.average_score.toFixed(2)})`);
+        console.log(` -> Area terendah ditemukan: "${lowestArea.area}"`);
 
+        // --- AWAL PERBAIKAN: Gunakan .filter() dengan wildcard '%' ---
         const { data: linkedTrainings, error: linkError } = await supabaseAdmin
-            .from('training_area_link')
-            .select('training_program_id, training_programs(nama_program)')
-            .ilike('area_name', lowestArea.area);
+            .from('training_programs')
+            .select(`
+                id,
+                nama_program,
+                training_area_link!inner ( area_name ) 
+            `)
+            // Filter 1: Berdasarkan Posisi
+            .or(
+                'posisi.is.null',
+                `posisi.cs.{"${employee.posisi}"}`
+            )
+            // Filter 2: Berdasarkan Area (fuzzy match)
+            .filter('training_area_link.area_name', 'ilike', `%${lowestArea.area}%`);
+        // --- AKHIR PERBAIKAN ---
 
-        if (linkError || !linkedTrainings || linkedTrainings.length === 0) {
-            console.log(` -> Tidak ada training yang cocok ditemukan.`);
+        if (linkError) {
+             console.error(` -> Error mencari training:`, linkError.message);
+             continue;
+        }
+
+        if (!linkedTrainings || linkedTrainings.length === 0) {
+            console.log(` -> Tidak ada training yang cocok ditemukan untuk area & posisi tersebut.`);
             continue;
         }
 
         for (const training of linkedTrainings) {
             const planToInsert = {
                 karyawan_id: employee.id,
-                training_program_id: training.training_program_id,
+                training_program_id: training.id,
                 periode: periode,
                 status: 'Disarankan',
                 assigned_by: 'Sistem Otomatis'
@@ -803,7 +946,7 @@ export async function generateTrainingRecommendations(periode) {
                 console.error(` -> Gagal memasukkan rekomendasi untuk ${employee.nama}:`, upsertError.message);
             } else {
                 recommendationsCreated++;
-                details.push(`- Untuk ${employee.nama}: direkomendasikan training "${training.training_programs.nama_program}"`);
+                details.push(`- Untuk ${employee.nama}: direkomendasikan training "${training.nama_program}"`);
             }
         }
     }
@@ -817,7 +960,7 @@ export async function generateTrainingRecommendations(periode) {
 // ... (semua server actions lain tidak berubah)
 
 export async function createAssessmentPeriod(formData) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const periodData = {
         nama_periode: formData.get('nama_periode'),
@@ -899,7 +1042,7 @@ export async function createAssessmentPeriod(formData) {
  * MENUTUP PERIODE PENILAIAN
  */
 export async function closeAssessmentPeriod(periodId) {
-    const supabase = createClient();
+    const supabase = await createClient();
     if (!periodId) return { error: 'ID Periode tidak ditemukan.' };
 
     const { error } = await supabase.from('assessment_periods').update({ status: 'Closed' }).eq('id', periodId);
@@ -913,7 +1056,7 @@ export async function closeAssessmentPeriod(periodId) {
  * MENYIMPAN HASIL PENILAIAN
  */
 export async function submitBehavioralAssessment(formData) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const relationshipId = formData.get('relationshipId');
     const aspectIds = formData.getAll('aspectId');
     
@@ -939,7 +1082,7 @@ export async function submitBehavioralAssessment(formData) {
 // Di dalam file: src/app/actions.js
 
 export async function getBehavioralDashboardData(periode) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) return { error: 'Not authenticated' };
 
@@ -989,7 +1132,7 @@ export async function getBehavioralDashboardData(periode) {
 }
 
 export async function invokeCertificateGenerator(employeeName, aspectName, period) {
-    const supabase = createClient(); // Gunakan createClient() standar
+    const supabase = await createClient(); // Gunakan createClient() standar
 
     // supabase.functions.invoke adalah cara modern dan aman untuk memanggil Edge Function
     const { data, error } = await supabase.functions.invoke('generate-certificate', {
@@ -1011,7 +1154,7 @@ export async function invokeCertificateGenerator(employeeName, aspectName, perio
 
 // --- FUNGSI BARU UNTUK MEN-GENERATE SEMUA SERTIFIKAT ---
 export async function generateAllCertificatesForPeriod(periodId) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const { data: periodData } = await supabase.from('assessment_periods').select('nama_periode').eq('id', periodId).single();
     if (!periodData) return { error: "Periode tidak ditemukan." };
@@ -1084,4 +1227,91 @@ export async function generateAllCertificatesForPeriod(periodId) {
         success: `${certificatesGenerated} sertifikat berhasil dibuat.`,
         details: details 
     };
+}
+
+export async function checkIsAssessor() {
+    const supabase = await createClient();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return false;
+
+    const { data: profile } = await supabase
+        .from('karyawan')
+        .select('id, role')
+        .eq('email', authUser.email)
+        .single();
+
+    if (!profile) return false;
+    if (profile.role === 'Admin') return true; // Admin otomatis bisa
+
+    // Cek apakah ID profile ini ada di kolom superior manapun
+    const { count, error } = await supabase
+        .from('karyawan')
+        .select('*', { count: 'exact', head: true })
+        .or(`superior_id.eq.${profile.id},superior_id_2.eq.${profile.id}`);
+
+    return count > 0;
+}
+
+export async function getEmployeesToAssess() {
+    const supabase = await createClient();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return [];
+
+    const cookieStore = await cookies();
+    let impersonateEmail = cookieStore.get('impersonate_email')?.value;
+
+    // Bersihkan email dari tanda kutip ganda (Sapu Jagat)
+    if (impersonateEmail) {
+        impersonateEmail = impersonateEmail.replace(/^["'](.*)["']$/, '$1').replace(/^"|"$/g, '').trim();
+    }
+
+    const { data: realUser } = await supabase
+        .from('karyawan')
+        .select('role')
+        .eq('email', authUser.email)
+        .single();
+
+    let activeEmail = (realUser?.role === 'Admin' && impersonateEmail) 
+                      ? impersonateEmail 
+                      : authUser.email;
+
+    // Pastikan email selalu huruf kecil untuk kecocokan database
+    activeEmail = activeEmail.toLowerCase().trim();
+
+    // --- PERBAIKAN 1: Ambil juga 'role' dari database ---
+    const { data: penilai, error } = await supabase
+        .from('karyawan')
+        .select('id, tipe_akun, role') 
+        .eq('email', activeEmail)
+        .single();
+
+    if (!penilai || error) {
+        console.error("DEBUG: Email yang dicari ->", activeEmail);
+        console.error("ERROR DB:", error);
+        return [];
+    }
+
+    let query = supabase.from('karyawan').select('id, nama, posisi');
+
+    // --- PERBAIKAN 2: Buka akses untuk semua yang memiliki role 'Admin' ---
+    if (penilai.role === 'Admin' || penilai.tipe_akun === 'Admin Non-Penilaian') {
+        // Admin: Ambil SEMUA karyawan (kecuali akun Admin Non-Penilaian itu sendiri)
+        query = query.neq('tipe_akun', 'Admin Non-Penilaian'); 
+    } else {
+        // Atasan biasa (Nabila, Garin, dll): Ambil hanya bawahannya
+        query = query.or(`superior_id.eq.${penilai.id},superior_id_2.eq.${penilai.id}`);
+    }
+
+    const { data: subordinates } = await query.order('nama');
+    return subordinates || [];
+}
+
+export async function setImpersonate(email) {
+    const cookieStore = await cookies();
+    cookieStore.set('impersonate_email', email);
+}
+
+export async function stopImpersonate() {
+    const cookieStore = await cookies();
+    cookieStore.delete('impersonate_email');
 }

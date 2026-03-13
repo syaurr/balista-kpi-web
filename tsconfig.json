@@ -15,7 +15,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "plugins": [
       {
@@ -28,7 +28,6 @@
       ]
     }
   },
-  
   // --- AWAL PERBAIKAN ---
   // Beritahu TypeScript untuk HANYA melihat ke dalam folder 'src'
   // dan file-file definisi Next.js
@@ -36,7 +35,8 @@
     "next-env.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
   ],
   // 'exclude' sekarang akan berfungsi dengan benar
   "exclude": [

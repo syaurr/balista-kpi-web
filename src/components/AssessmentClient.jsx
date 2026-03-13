@@ -43,8 +43,17 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const [monthInput, setMonthInput] = useState(monthFromUrl);
     const [yearInput, setYearInput] = useState(yearFromUrl);
 
-    const { kpis, scores, generalNote, recommendations, areaScores: initialAreaScores, kpiHistory } = initialAssessmentData || {};
-    
+    const { 
+        kpis = [], 
+        scores = {}, 
+        generalNote = '', 
+        recommendations = [], 
+        gapAnalysis = {}, 
+        hasConflict = false,
+        kpiHistory = [],
+        gapWarnings = [] // <-- TAMBAHKAN INI DI SINI
+    } = initialAssessmentData || {};
+        
     const [currentScores, setCurrentScores] = useState(scores || {});
     const [currentGeneralNote, setCurrentGeneralNote] = useState(generalNote || '');
     const [currentRecommendations, setCurrentRecommendations] = useState(recommendations || []);
@@ -55,13 +64,15 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     const [message, setMessage] = useState(null);
     const [linkModalKpi, setLinkModalKpi] = useState(null);
 
-     useEffect(() => {
-        if (initialAssessmentData) {
+    useEffect(() => {
+        // Gunakan pengecekan yang lebih dalam
+        if (initialAssessmentData && initialAssessmentData.kpis) {
+            console.log("Data sampai di Client:", initialAssessmentData); // Cek di Console Browser (F12)
             setCurrentScores(initialAssessmentData.scores || {});
             setCurrentGeneralNote(initialAssessmentData.generalNote || '');
             setCurrentRecommendations(initialAssessmentData.recommendations || []);
         }
-    }, [initialAssessmentData]); 
+    }, [initialAssessmentData]);
 
     const periode = useMemo(() => {
         if (!employeeIdFromUrl) return null;
@@ -73,7 +84,9 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
         params.set('karyawanId', employeeInput);
         params.set('bulan', monthInput);
         params.set('tahun', yearInput);
-        router.push(`/dashboard/admin/assessment?${params.toString()}`);
+        
+        // --- PERBAIKAN: Hapus '/admin' dari jalur URL ---
+        router.push(`/dashboard/assessment?${params.toString()}`);
     };
     
     const { totalNilaiAkhir, nilaiProporsional, areaScores } = useMemo(() => {
@@ -119,44 +132,41 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
     }, [kpis]);
 
     const chartAreaScores = useMemo(() => {
-    if (!areaScores || !kpis || areaScores.length === 0 || kpis.length === 0) {
+    // Kita bypass areaScores dari database, kita hitung langsung dari tabel kpis & scores!
+    if (!kpis || !scores || kpis.length === 0) {
         return [];
     }
 
-    // 1. Buat pemetaan dari area_kerja -> area
-    const areaKerjaToAreaMap = new Map();
-        kpis.forEach(kpi => {
-            if (kpi.area_kerja && kpi.area) {
-                areaKerjaToAreaMap.set(kpi.area_kerja, kpi.area);
+    const groupedByArea = {}; 
+    
+    // 1. Kelilingi semua Master KPI yang ada
+    kpis.forEach(kpi => {
+        // Ambil nilai akhir untuk KPI ini
+        const kpiScore = scores[kpi.id]; 
+
+        // 2. Jika KPI ini sudah dinilai, masukkan ke keranjang "Area"-nya
+        if (kpiScore !== undefined && kpiScore !== null) {
+            const mainArea = kpi.area; // <--- KUNCI: Kita ambil langsung dari kolom 'area'
+
+            if (!groupedByArea[mainArea]) {
+                groupedByArea[mainArea] = { total: 0, count: 0 };
             }
-        });
+            
+            // Tambahkan nilai ke keranjang
+            groupedByArea[mainArea].total += kpiScore;
+            groupedByArea[mainArea].count += 1;
+        }
+    });
 
-        // 2. Kelompokkan skor berdasarkan 'Area' umum
-        const groupedByArea = {}; // Format: { 'Kinerja & Evaluasi': { scores: [85, 90], count: 2 } }
-        
-        areaScores.forEach(scoreItem => {
-            const specificArea = scoreItem.area; // Ini adalah 'area_kerja' dari RPC
-            const generalArea = areaKerjaToAreaMap.get(specificArea);
+    // 3. Hitung rata-rata final untuk Chart Donut
+    return Object.entries(groupedByArea).map(([areaName, data]) => {
+        return {
+            area: areaName,
+            average_score: Number((data.total / data.count).toFixed(2))
+        };
+    });
 
-            if (generalArea) {
-                if (!groupedByArea[generalArea]) {
-                    groupedByArea[generalArea] = { scores: [], count: 0 };
-                }
-                groupedByArea[generalArea].scores.push(scoreItem.average_score);
-                groupedByArea[generalArea].count += 1;
-            }
-        });
-
-        // 3. Hitung rata-rata final untuk setiap 'Area' umum
-        return Object.entries(groupedByArea).map(([areaName, data]) => {
-            const sum = data.scores.reduce((total, score) => total + score, 0);
-            return {
-                area: areaName,
-                average_score: sum / data.count,
-            };
-        });
-
-    }, [areaScores, kpis]);
+}, [kpis, scores]); // Cukup butuh 2 data ini saja
 
     const handleScoreChange = (kpiId, value) => {
         setCurrentScores(prev => ({ ...prev, [kpiId]: Math.max(0, Math.min(100, parseInt(value, 10) || 0)) }));
@@ -214,7 +224,7 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
         value: (i + 1).toString().padStart(2, '0'),
         label: new Date(0, i).toLocaleString('id-ID', { month: 'long' })
     }));
-
+    
     return (
         <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-md">
@@ -258,7 +268,13 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                                 
                     <div className="bg-white p-6 rounded-xl shadow-md">
                         <label className="block text-sm font-bold text-gray-700 mb-2">Catatan Umum</label>
-                        <textarea value={currentGeneralNote} onChange={(e) => setCurrentGeneralNote(e.target.value)} rows="3" className="textarea textarea-bordered w-full"/>
+                        <textarea 
+                            value={currentGeneralNote} 
+                            onChange={(e) => setCurrentGeneralNote(e.target.value)} 
+                            rows="12" 
+                            className="textarea textarea-bordered w-full min-h-[150px] leading-relaxed"
+                            placeholder="Tuliskan catatan umum di sini. Bisa menggunakan enter (baris baru)..."
+                        />
                     </div>
 
                     <details className="collapse collapse-arrow bg-white shadow-md rounded-xl" open>
@@ -310,28 +326,90 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                     
                     <div className="bg-white p-6 rounded-xl shadow-md">
                         <h3 className="text-lg font-bold text-[#6b1815] mb-4">Input Skor KPI</h3>
-                        <div className="space-y-4">
-                            {kpis.map((kpi, index) => (
-                                <div key={kpi.id} className="p-4 border rounded-lg flex flex-col md:flex-row items-center justify-between gap-4">
-                                    <div className="flex-grow w-full">
-                                        <label className="font-bold">{index + 1}. {kpi.kpi_deskripsi}</label>
-                                        <p className="text-xs text-gray-500">Area Kerja: {kpi.area_kerja} | Bobot: {kpi.bobot}%</p>
-                                        {kpi.kpi_links && kpi.kpi_links.length > 0 && (
-                                            <button onClick={() => setLinkModalKpi(kpi)} className="btn btn-xs btn-outline mt-2">
-                                                Lihat Link ({kpi.kpi_links.length})
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="w-full md:w-52 text-center flex-shrink-0">
-                                        <input
-                                            type="number" min="0" max="100"
-                                            value={currentScores[kpi.id] || 0}
-                                            onChange={(e) => handleScoreChange(kpi.id, e.target.value)}
-                                            className="input input-bordered w-32 text-center text-xl font-bold"
-                                        />
+                        {gapWarnings && gapWarnings.length > 0 && (
+                            <div className="alert alert-warning shadow-lg mb-6 border-l-4 border-yellow-500 bg-yellow-50">
+                                <div>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current flex-shrink-0 h-6 w-6 text-yellow-700" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                    <div>
+                                        <h3 className="font-bold text-yellow-800">Perhatian: Ada Perbedaan Persepsi Penilaian</h3>
+                                        <p className="text-sm text-yellow-700">
+                                            Sistem mendeteksi selisih nilai <span className="font-bold underline">lebih dari 20 poin</span> dengan penilai lain pada KPI berikut: 
+                                            <span className="font-bold"> {gapWarnings.join(', ')}</span>. 
+                                            Harap diskusikan dengan penilai lain untuk menyelaraskan ekspektasi kinerja.
+                                        </p>
                                     </div>
                                 </div>
-                            ))}
+                            </div>
+                        )}
+                        <div className="space-y-4">
+                            {kpis?.map((kpi, index) => {
+                                // 1. Ambil data konflik/gap dari data yang dikirim server actions
+                                const conflictData = initialAssessmentData?.gapAnalysis?.[kpi.id];
+                                const isConflict = conflictData?.isConflict;
+
+                                return (
+                                    <div 
+                                        key={kpi.id} 
+                                        // 2. Beri warna background merah muda dan border merah jika ada konflik
+                                        className={`p-4 border rounded-lg flex flex-col md:flex-row items-center justify-between gap-4 transition-all duration-300 ${
+                                            isConflict ? 'bg-red-50 border-red-500 shadow-inner' : 'bg-white border-gray-200'
+                                        }`}
+                                    >
+                                        <div className="flex-grow w-full">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <label className={`font-bold ${isConflict ? 'text-red-700' : 'text-gray-700'}`}>
+                                                    {index + 1}. {kpi.kpi_deskripsi}
+                                                </label>
+                                                
+                                                {/* 3. Badge Peringatan jika selisih > 10 */}
+                                                {isConflict && (
+                                                    <div className="badge badge-error gap-1 text-white font-bold animate-pulse">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-4 h-4 stroke-current"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                                        GAP {conflictData.gap} POINT
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <p className="text-xs text-gray-500">Area Kerja: {kpi.area_kerja} | Bobot: {kpi.bobot}%</p>
+                                            
+                                            {/* 4. Pesan Instruksi Khusus Konflik */}
+                                            {isConflict && (
+                                                <p className="text-xs text-red-600 mt-2 font-medium italic bg-red-100 p-2 rounded border border-red-200">
+                                                    ⚠️ Terdeteksi perbedaan nilai yang signifikan dengan Assessor lain. 
+                                                    Harap diskusikan kembali agar selisih maksimal 10 poin.
+                                                </p>
+                                            )}
+
+                                            {kpi.kpi_links && kpi.kpi_links.length > 0 && (
+                                                <button onClick={() => setLinkModalKpi(kpi)} className="btn btn-xs btn-outline mt-2">
+                                                    Lihat Link ({kpi.kpi_links.length})
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="w-full md:w-52 text-center flex-shrink-0">
+                                            <input
+                                                type="number" 
+                                                min="0" 
+                                                max="100"
+                                                value={currentScores[kpi.id] || 0}
+                                                onChange={(e) => handleScoreChange(kpi.id, e.target.value)}
+                                                
+                                                // Mematikan fokus saat kursor di-scroll
+                                                onWheel={(e) => e.target.blur()} 
+                                                
+                                                // Class lengkap dengan penyembunyi tombol panah (spin button)
+                                                className={`input input-bordered w-32 text-center text-xl font-bold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none ${
+                                                    isConflict 
+                                                    ? 'border-red-500 text-red-700 bg-red-100 focus:ring-red-500 focus:border-red-500' 
+                                                    : 'focus:ring-primary'
+                                                }`}
+                                            />
+                                            {isConflict && <p className="text-[10px] text-red-500 mt-1 font-bold">REVISI DIBUTUHKAN</p>}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                         <div className="mt-6 flex justify-end">
                             <button onClick={handleSave} disabled={loading} className="btn btn-primary btn-lg">{loading ? 'Menyimpan...' : 'Simpan Seluruh Penilaian'}</button>
@@ -369,6 +447,18 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                         </div>
                     </form>
                 </Modal>
+            )}
+
+            {hasConflict && (
+                <div className="alert alert-error shadow-lg mb-6 border-2 border-red-600 bg-red-50">
+                    <div>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current flex-shrink-0 h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span className="font-bold text-red-800">
+                            PERHATIAN: Terdeteksi selisih nilai {'>'}10 poin antara Assessor 1 dan 2 pada beberapa KPI. 
+                            Harap diskusikan kembali hingga selisih mengecil.
+                        </span>
+                    </div>
+                </div>
             )}
         </div>
     );

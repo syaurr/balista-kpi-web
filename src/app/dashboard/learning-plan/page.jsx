@@ -22,7 +22,7 @@ export default function LearningPlanPage() {
 
     // --- Pengambilan Data di Sisi Klien ---
     useEffect(() => {
-        const supabase = createClient();
+        const supabase = awaitcreateClient();
         
         async function getLearningPlanData() {
             setLoading(true);
