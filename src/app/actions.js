@@ -522,7 +522,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
     const { data: targetKaryawan } = await supabase.from('karyawan').select('posisi').eq('id', karyawanId).single();
     if (!targetKaryawan) return null;
 
-    const { data: kpis } = await supabase.from('kpi_master').select('*').eq('posisi', targetKaryawan.posisi).eq('is_active', true).order('area');
+    const { data: kpis } = await supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', targetKaryawan.posisi).eq('is_active', true).order('area');
 
     // 3. FILTER "MATA PENUTUP" (Hanya ambil nilainya sendiri, ATAU nilai lama yang penilai_id-nya null)
     const penilaiFilter = `penilai_id.eq.${activePenilai.id},penilai_id.is.null`;
