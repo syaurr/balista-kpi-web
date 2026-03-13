@@ -356,12 +356,23 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                                         }`}
                                     >
                                         <div className="flex-grow w-full">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <label className={`font-bold ${isConflict ? 'text-red-700' : 'text-gray-700'}`}>
+                                            {/* 1. BARIS ATAS: Judul KPI & Metadata Pendek */}
+                                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                                                <label className={`text-base font-bold ${isConflict ? 'text-red-700' : 'text-gray-800'}`}>
                                                     {index + 1}. {kpi.kpi_deskripsi}
                                                 </label>
                                                 
-                                                {/* 3. Badge Peringatan jika selisih > 10 */}
+                                                {/* Badge untuk Area dan Bobot (Singkat & Padat) */}
+                                                <div className="flex gap-2">
+                                                    <span className="badge badge-sm font-medium text-gray-600 bg-gray-100 border-none">
+                                                        📂 {kpi.area_kerja || '-'}
+                                                    </span>
+                                                    <span className="badge badge-sm font-medium text-gray-600 bg-gray-100 border-none">
+                                                        ⚖️ Bobot: {kpi.bobot}%
+                                                    </span>
+                                                </div>
+
+                                                {/* Badge Peringatan jika selisih > 10 */}
                                                 {isConflict && (
                                                     <div className="badge badge-error gap-1 text-white font-bold animate-pulse">
                                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-4 h-4 stroke-current"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
@@ -370,19 +381,32 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                                                 )}
                                             </div>
 
-                                            <p className="text-xs text-gray-500">Area Kerja: {kpi.area_kerja} | Bobot: {kpi.bobot}%</p>
+                                            {/* 2. BARIS TENGAH: Kotak Callout Target Standar (Modern UI) */}
+                                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 relative shadow-sm">
+                                                {/* Aksen garis warna di kiri untuk estetika */}
+                                                <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500 rounded-l-lg"></div>
+                                                <div className="pl-3">
+                                                    <span className="font-bold text-blue-900 text-xs uppercase tracking-wider block mb-1">
+                                                        🎯 Target Standar
+                                                    </span>
+                                                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                                        {kpi.target_standar || <span className="italic text-gray-400">Belum ada target spesifik untuk KPI ini.</span>}
+                                                    </p>
+                                                </div>
+                                            </div>
                                             
-                                            {/* 4. Pesan Instruksi Khusus Konflik */}
+                                            {/* 3. BARIS BAWAH: Pesan Instruksi Khusus Konflik */}
                                             {isConflict && (
-                                                <p className="text-xs text-red-600 mt-2 font-medium italic bg-red-100 p-2 rounded border border-red-200">
+                                                <p className="text-xs text-red-600 mb-2 font-medium italic bg-red-100 p-2 rounded border border-red-200">
                                                     ⚠️ Terdeteksi perbedaan nilai yang signifikan dengan Assessor lain. 
                                                     Harap diskusikan kembali agar selisih maksimal 10 poin.
                                                 </p>
                                             )}
 
+                                            {/* Tombol Link Referensi (Jika ada) */}
                                             {kpi.kpi_links && kpi.kpi_links.length > 0 && (
-                                                <button onClick={() => setLinkModalKpi(kpi)} className="btn btn-xs btn-outline mt-2">
-                                                    Lihat Link ({kpi.kpi_links.length})
+                                                <button onClick={() => setLinkModalKpi(kpi)} className="btn btn-xs btn-outline mt-1">
+                                                    Lihat Referensi ({kpi.kpi_links.length})
                                                 </button>
                                             )}
                                         </div>
