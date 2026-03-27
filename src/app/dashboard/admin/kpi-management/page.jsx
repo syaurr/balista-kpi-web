@@ -1,9 +1,6 @@
-import { createClient } from '../../../../utils/supabase/server';
-import { cookies } from 'next/headers';
-import KpiManagementClient from '../../../../components/KpiManagementClient';
-
 async function getKpiPageData() {
-    const supabase = createClient(cookies());
+    // 1. TAMBAHKAN AWAIT DI SINI
+    const supabase = await createClient(cookies());
 
     // --- PERBAIKAN QUERY: Ambil data KPI beserta link-nya ---
     const { data: kpis } = await supabase
