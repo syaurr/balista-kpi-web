@@ -1,3 +1,7 @@
+import { createClient } from '../../../../utils/supabase/server';
+import { cookies } from 'next/headers';
+import KpiManagementClient from '../../../../components/KpiManagementClient';
+
 async function getKpiPageData() {
     // 1. TAMBAHKAN AWAIT DI SINI
     const supabase = await createClient(cookies());
