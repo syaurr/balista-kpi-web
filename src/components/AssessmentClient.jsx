@@ -261,7 +261,8 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
 
                     <section className="bg-white p-6 rounded-xl shadow-md">
                         <h3 className="text-lg font-bold text-[#6b1815] mb-4">Tren Kinerja KPI (Semua Periode)</h3>
-                        <div className="h-96 w-full">
+                        {/* Ubah h-96 menjadi h-[500px] agar lebih tinggi dan lega */}
+                        <div className="h-[500px] w-full">
                             <KpiHistoryChart kpiHistory={kpiHistory} />
                         </div>
                     </section>

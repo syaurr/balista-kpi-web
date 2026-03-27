@@ -496,15 +496,10 @@ export async function getAssessmentDataLogic(supabase, karyawanId, periode) {
     return finalResult;
 }
 
-// src/app/actions.js
-
-// src/app/actions.js
-
 export async function fetchAssessmentData(karyawanId, periode) {
     const supabase = await createClient();
     if (!karyawanId || !periode) return null;
 
-    // 1. Ambil KTP Penilai yang sedang buka halaman ini
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) return null;
 
@@ -518,13 +513,11 @@ export async function fetchAssessmentData(karyawanId, periode) {
     const { data: activePenilai } = await supabase.from('karyawan').select('id').eq('email', activeEmail.toLowerCase().trim()).single();
     if (!activePenilai) return null;
 
-    // 2. Ambil Master KPI & Identifikasi Atasan (Untuk deteksi Partner Assessor)
     const { data: targetKaryawan } = await supabase.from('karyawan').select('posisi, superior_id, superior_id_2').eq('id', karyawanId).single();
     if (!targetKaryawan) return null;
 
     const { data: kpis } = await supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', targetKaryawan.posisi).eq('is_active', true).order('area');
 
-    // --- LOGIKA BLIND ASSESSMENT (Deteksi "Partner" Penilai) ---
     let partnerAssessorId = null;
     if (activePenilai.id === targetKaryawan.superior_id && targetKaryawan.superior_id !== targetKaryawan.superior_id_2) {
         partnerAssessorId = targetKaryawan.superior_id_2;
@@ -532,7 +525,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
         partnerAssessorId = targetKaryawan.superior_id;
     }
 
-    // 3. Ambil Semua Data dari Database Tanpa Filter 'or' (Transparansi Penuh)
+    // 3. KEMBALI MENGGUNAKAN RPC DATABASE UNTUK SEJARAH (Agar Juni-Nov kembali)
     const [
         allScoresResult, 
         allSummaryResult, 
@@ -544,24 +537,16 @@ export async function fetchAssessmentData(karyawanId, periode) {
         supabase.from('penilaian_summary').select('catatan_kpi, penilai_id').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.from('kpi_summary_recommendations').select('id, rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
-        supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId })
+        supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId }) // <-- RPC IS BACK!
     ]);
 
-    // 4. SMART FILTER: Blokir Partner, Tampilkan Sendiri / Histori Admin
     const scoresMap = {};
     if (allScoresResult.data) {
         allScoresResult.data.forEach(s => {
-            // ATURAN 1 (ANTI BOCOR): Buang nilai milik Partner Assessor
-            if (partnerAssessorId && s.penilai_id === partnerAssessorId) {
-                return; 
-            }
-
-            // ATURAN 2: Prioritaskan nilai ketikan sendiri
+            if (partnerAssessorId && s.penilai_id === partnerAssessorId) return; 
             if (s.penilai_id === activePenilai.id) {
                 scoresMap[s.kpi_master_id] = s.nilai;
-            } 
-            // ATURAN 3: Jika ini nilai dari Admin/Sistem Lama, Tampilkan!
-            else if (!scoresMap[s.kpi_master_id]) {
+            } else if (!scoresMap[s.kpi_master_id]) {
                 scoresMap[s.kpi_master_id] = s.nilai;
             }
         });
@@ -569,9 +554,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
 
     let finalGeneralNote = '';
     if (allSummaryResult.data && allSummaryResult.data.length > 0) {
-        // Saring catatan agar tulisan Partner tidak ikut terbaca
         const validSummaries = allSummaryResult.data.filter(sum => !(partnerAssessorId && sum.penilai_id === partnerAssessorId));
-        
         const mySummary = validSummaries.find(sum => sum.penilai_id === activePenilai.id);
         if (mySummary) {
             finalGeneralNote = mySummary.catatan_kpi;
@@ -580,13 +563,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
         }
     }
 
-    // 5. Cek Gap Assessment (Sistem 2 Assessor)
-    const { data: allScoresForGap } = await supabase
-        .from('penilaian_kpi')
-        .select('kpi_master_id, kpi_deskripsi, nilai, penilai_id')
-        .eq('karyawan_id', karyawanId)
-        .eq('periode', periode);
-
+    const { data: allScoresForGap } = await supabase.from('penilaian_kpi').select('kpi_master_id, kpi_deskripsi, nilai, penilai_id').eq('karyawan_id', karyawanId).eq('periode', periode);
     const gapWarnings = [];
     if (allScoresForGap && allScoresForGap.length > 0) {
         const scoresByKpi = {};
@@ -594,19 +571,15 @@ export async function fetchAssessmentData(karyawanId, periode) {
             if (!scoresByKpi[s.kpi_master_id]) scoresByKpi[s.kpi_master_id] = { deskripsi: s.kpi_deskripsi, scores: [] };
             scoresByKpi[s.kpi_master_id].scores.push(s.nilai);
         });
-
         Object.values(scoresByKpi).forEach(kpi => {
             if (kpi.scores.length > 1) {
                 const maxScore = Math.max(...kpi.scores);
                 const minScore = Math.min(...kpi.scores);
-                if ((maxScore - minScore) >= 20) {
-                    gapWarnings.push(kpi.deskripsi);
-                }
+                if ((maxScore - minScore) >= 20) gapWarnings.push(kpi.deskripsi);
             }
         });
     }
 
-    // --- 6. 🛡️ PENJAGA PINTU GRAFIK AREA & NILAI AKHIR (ANTI-BOCOR) ---
     const areaCalc = {};
     kpis.forEach(kpi => {
         const score = scoresMap[kpi.id];
@@ -623,67 +596,79 @@ export async function fetchAssessmentData(karyawanId, periode) {
         rata_rata: Number((areaCalc[area].total / areaCalc[area].count).toFixed(2))
     }));
 
-    // --- 7. 🛡️ PENJAGA PINTU GRAFIK HISTORI ---
+    // --- 7. 🛡️ PENJAGA PINTU GRAFIK (DISEMPURNAKAN) ---
     let safeHistory = historyResult.data || [];
-    
-    // 7A. DETEKTIF KUNCI: Cari tahu apa nama variabel nilai dari database
-    // (Apakah grafik mencari 'nilai', 'skor', 'rata_rata', atau 'nilai_akhir'?)
-    let detectedKey = 'rata_rata';
-    if (safeHistory.length > 0) {
-        const sampleItem = safeHistory[0];
-        // Cari nama kunci yang dipakai untuk menyimpan angka (selain periode)
-        const foundKey = Object.keys(sampleItem).find(k => 
-            k !== 'periode' && k !== 'karyawan_id' && k !== 'id'
-        );
-        if (foundKey) {
-            detectedKey = foundKey;
-        }
-    }
 
-    // 7B. Buang data bulan ini bawaan database (karena rawan bocor gabungan)
+    // 7A. Usir hantu "null" dari database
+    safeHistory = safeHistory.filter(item => item.periode && item.periode.trim() !== '' && item.periode !== 'null');
+
+    // 7B. Hapus bulan saat ini dari RPC (karena kita akan hitung manual agar super akurat)
+    let currentMonthSortable = null;
     safeHistory = safeHistory.filter(item => {
-        if (item.periode && periode) {
-             return item.periode.toLowerCase().trim() !== periode.toLowerCase().trim();
+        if (item.periode.toLowerCase().trim() === periode.toLowerCase().trim()) {
+            currentMonthSortable = item.periode_sortable;
+            return false;
         }
         return true;
     });
 
-    // 7C. Hitung manual rata-rata SAAT INI (Presisi Ekstra Ketat)
+    // 7C. Hitung Manual Bulan Ini (Pakai RUMUS BOBOT UI)
     let myTotalScore = 0;
-    let filledKpiCount = 0;
+    let totalBobotYangDinilai = 0;
 
-    // Kita looping berdasarkan KPI Master agar dijamin hanya membaca nilai yang sah
     kpis.forEach(kpi => {
         const score = scoresMap[kpi.id];
         if (score !== undefined && score !== null && score !== '') {
             const numScore = parseFloat(score);
-            // Pastikan yang dihitung benar-benar format Angka, bukan Teks kosong
             if (!isNaN(numScore)) {
-                myTotalScore += numScore;
-                filledKpiCount += 1; // Hanya tambah pembagi jika kolom ini sudah dinilai
+                myTotalScore += numScore * (kpi.bobot / 100.0);
+                if (numScore > 0) {
+                    totalBobotYangDinilai += kpi.bobot;
+                }
             }
         }
     });
 
-    // 7D. Suntikkan nilai ke grafik dengan TEBAR JARING KUNCI
-    if (filledKpiCount > 0) {
-        const safeAverage = Number((myTotalScore / filledKpiCount).toFixed(2));
+    // 7D. Masukkan hasil hitung manual ke grafik
+    if (totalBobotYangDinilai > 0 || myTotalScore > 0) {
+        const safeProporsional = totalBobotYangDinilai > 0 ? (myTotalScore / (totalBobotYangDinilai / 100.0)) : 0;
         
-        const newGraphItem = {
+        // Buat format tanggal jika currentMonthSortable kosong
+        if (!currentMonthSortable) {
+            const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+            const parts = periode.split(' ');
+            const bIdx = monthNames.indexOf(parts[0]);
+            currentMonthSortable = (bIdx !== -1 && parts[1]) ? `${parts[1]}-${String(bIdx + 1).padStart(2, '0')}-01` : periode;
+        }
+
+        safeHistory.push({
             periode: periode,
-            [detectedKey]: safeAverage, // 1. Pakai kunci yang terdeteksi dari DB
-            
-            // 2. JARING PENGAMAN (Pasti salah satu dari ini yang dipakai oleh komponen Grafik Kakak)
-            rata_rata: safeAverage,
-            nilai: safeAverage,
-            skor: safeAverage,
-            nilai_akhir: safeAverage,
-            total: safeAverage,
-            average: safeAverage
-        };
-        
-        safeHistory.push(newGraphItem);
+            periode_sortable: currentMonthSortable,
+            total_nilai_akhir: Number(myTotalScore.toFixed(2)),
+            nilai_proporsional: Number(safeProporsional.toFixed(2))
+        });
     }
+
+    // 7E. FILTER MESIN WAKTU (Cegah Januari bocor ke Desember) & FIX 166.04
+    safeHistory = safeHistory.filter(item => {
+        // Jika sedang buka Desember (misal 2025-12-01), buang Januari (2026-01-01)
+        if (currentMonthSortable && item.periode_sortable && item.periode_sortable > currentMonthSortable) {
+            return false;
+        }
+        return true;
+    }).map(item => {
+        // Tembel bug Database yang menjumlahkan 2 Assessor jadi 166.04!
+        if (item.total_nilai_akhir > 100) {
+            item.total_nilai_akhir = Number((item.total_nilai_akhir / 2).toFixed(2));
+        }
+        return item;
+    });
+
+    // 7F. Urutkan rapi dari kiri ke kanan (Mencegah Januari lompat ke kiri)
+    safeHistory.sort((a, b) => {
+        if (!a.periode_sortable || !b.periode_sortable) return 0;
+        return a.periode_sortable.localeCompare(b.periode_sortable);
+    });
 
     return {
         kpis: kpis || [],
@@ -691,12 +676,11 @@ export async function fetchAssessmentData(karyawanId, periode) {
         generalNote: finalGeneralNote, 
         recommendations: recommendationsResult.data || [],
         areaScores: safeAreaScores, 
-        kpiHistory: safeHistory, // <-- Histori yang sudah dijamin terbaca oleh grafik
+        kpiHistory: safeHistory, // <-- KEMBALI NORMAL & BEBAS BUG!
         gapWarnings: gapWarnings,
         isDataFound: Object.keys(scoresMap).length > 0
     };
 }
-// src/app/actions.js
 
 export async function saveFullAssessment(formData) {
     const supabase = await createClient(); 
