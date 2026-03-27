@@ -518,13 +518,21 @@ export async function fetchAssessmentData(karyawanId, periode) {
     const { data: activePenilai } = await supabase.from('karyawan').select('id').eq('email', activeEmail.toLowerCase().trim()).single();
     if (!activePenilai) return null;
 
-    // 2. Ambil Master KPI
-    const { data: targetKaryawan } = await supabase.from('karyawan').select('posisi').eq('id', karyawanId).single();
+    // 2. Ambil Master KPI & Identifikasi Atasan (PERBAIKAN: Ambil superior_id dan superior_id_2)
+    const { data: targetKaryawan } = await supabase.from('karyawan').select('posisi, superior_id, superior_id_2').eq('id', karyawanId).single();
     if (!targetKaryawan) return null;
 
     const { data: kpis } = await supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', targetKaryawan.posisi).eq('is_active', true).order('area');
 
-    // 3. OPSI A: TRANSPARANSI PENUH (Ambil semua nilai tanpa peduli ID Penilainya)
+    // --- LOGIKA BLIND ASSESSMENT (Deteksi "Partner" Penilai) ---
+    let partnerAssessorId = null;
+    if (activePenilai.id === targetKaryawan.superior_id && targetKaryawan.superior_id !== targetKaryawan.superior_id_2) {
+        partnerAssessorId = targetKaryawan.superior_id_2;
+    } else if (activePenilai.id === targetKaryawan.superior_id_2 && targetKaryawan.superior_id !== targetKaryawan.superior_id_2) {
+        partnerAssessorId = targetKaryawan.superior_id;
+    }
+
+    // 3. Ambil Semua Data Transparansi
     const [
         allScoresResult, 
         allSummaryResult, 
@@ -539,23 +547,37 @@ export async function fetchAssessmentData(karyawanId, periode) {
         supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId })
     ]);
 
-    // 4. SMART FILTER: Prioritaskan nilai milik sendiri, kalau kosong ambil dari histori orang lain (Admin/Atasan lama)
+    // 4. SMART FILTER: Blokir Rekan, Tampilkan Sendiri / Histori Admin
     const scoresMap = {};
     if (allScoresResult.data) {
         allScoresResult.data.forEach(s => {
-            if (!scoresMap[s.kpi_master_id]) {
-                scoresMap[s.kpi_master_id] = s.nilai; // Masukkan nilai historis dari siapa saja (Admin/Atasan lama)
-            } else if (s.penilai_id === activePenilai.id) {
-                scoresMap[s.kpi_master_id] = s.nilai; // Timpa jika ini nilai ketikan Assessor sendiri
+            // ATURAN 1 (ANTI BOCOR): Jika ini nilai dari Nabila (Partner), buang dari pandangan Tria!
+            if (partnerAssessorId && s.penilai_id === partnerAssessorId) {
+                return; // Skip data ini
+            }
+
+            // ATURAN 2: Prioritaskan nilai ketikan sendiri
+            if (s.penilai_id === activePenilai.id) {
+                scoresMap[s.kpi_master_id] = s.nilai;
+            } 
+            // ATURAN 3: Jika belum menilai, dan ini nilai dari Admin/Sistem Lama (Desember), Tampilkan!
+            else if (!scoresMap[s.kpi_master_id]) {
+                scoresMap[s.kpi_master_id] = s.nilai;
             }
         });
     }
 
     let finalGeneralNote = '';
     if (allSummaryResult.data && allSummaryResult.data.length > 0) {
-        // Cari catatan milik sendiri dulu, kalau tidak ada, pakai catatan historis orang lain
-        const mySummary = allSummaryResult.data.find(sum => sum.penilai_id === activePenilai.id);
-        finalGeneralNote = mySummary ? mySummary.catatan_kpi : allSummaryResult.data[0].catatan_kpi;
+        // Saring catatan agar tulisan Partner (Nabila) tidak ikut terbaca
+        const validSummaries = allSummaryResult.data.filter(sum => !(partnerAssessorId && sum.penilai_id === partnerAssessorId));
+        
+        const mySummary = validSummaries.find(sum => sum.penilai_id === activePenilai.id);
+        if (mySummary) {
+            finalGeneralNote = mySummary.catatan_kpi;
+        } else if (validSummaries.length > 0) {
+            finalGeneralNote = validSummaries[0].catatan_kpi;
+        }
     }
 
     // 5. Cek Gap Assessment (Sistem 2 Assessor)
@@ -592,7 +614,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
         areaScores: areaScoresResult.data || [],
         kpiHistory: historyResult.data || [],
         gapWarnings: gapWarnings,
-        isDataFound: Object.keys(scoresMap).length > 0 // Akurasi tinggi pendeteksi data
+        isDataFound: Object.keys(scoresMap).length > 0
     };
 }
 
