@@ -606,13 +606,28 @@ export async function fetchAssessmentData(karyawanId, periode) {
         });
     }
 
-    // --- 6. PENJAGA PINTU GRAFIK (ANTI-BOCOR) ---
+    const areaCalc = {};
+    kpis.forEach(kpi => {
+        const score = scoresMap[kpi.id];
+        if (score !== undefined && score !== null) {
+            const areaName = kpi.area || kpi.area_kerja || 'Lainnya';
+            if (!areaCalc[areaName]) areaCalc[areaName] = { total: 0, count: 0 };
+            areaCalc[areaName].total += Number(score);
+            areaCalc[areaName].count += 1;
+        }
+    });
+
+    const safeAreaScores = Object.keys(areaCalc).map(area => ({
+        area: area,
+        rata_rata: Number((areaCalc[area].total / areaCalc[area].count).toFixed(2))
+    }));
+
+    // --- 7. 🛡️ PENJAGA PINTU GRAFIK HISTORI ---
     let safeHistory = historyResult.data || [];
     safeHistory = safeHistory.filter(item => {
-        // Sembunyikan bulan yang SEDANG diakses ini dari grafik Sejarah.
-        // Mencegah Tria menebak nilai Nabila dari lonjakan grafik rata-rata di bulan ini.
-        if (item.periode === periode) {
-            return false; 
+        // Gunakan toLowerCase() agar "Maret 2026" tidak tembus karena beda huruf dengan "maret 2026"
+        if (item.periode && periode) {
+             return item.periode.toLowerCase().trim() !== periode.toLowerCase().trim();
         }
         return true;
     });
@@ -622,8 +637,8 @@ export async function fetchAssessmentData(karyawanId, periode) {
         scores: scoresMap,
         generalNote: finalGeneralNote, 
         recommendations: recommendationsResult.data || [],
-        areaScores: areaScoresResult.data || [],
-        kpiHistory: safeHistory, // Gunakan history yang sudah diamankan
+        areaScores: safeAreaScores, // <-- GUNAKAN HASIL HITUNG MANUAL YANG AMAN
+        kpiHistory: safeHistory,    // <-- GUNAKAN HISTORI YANG SUDAH KEBAL TYPO
         gapWarnings: gapWarnings,
         isDataFound: Object.keys(scoresMap).length > 0
     };
