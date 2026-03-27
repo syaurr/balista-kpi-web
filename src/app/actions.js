@@ -626,7 +626,21 @@ export async function fetchAssessmentData(karyawanId, periode) {
     // --- 7. 🛡️ PENJAGA PINTU GRAFIK HISTORI ---
     let safeHistory = historyResult.data || [];
     
-    // 7A. Buang data bulan ini bawaan database (karena rawan bocor gabungan 2 Assessor)
+    // 7A. DETEKTIF KUNCI: Cari tahu apa nama variabel nilai dari database
+    // (Apakah grafik mencari 'nilai', 'skor', 'rata_rata', atau 'nilai_akhir'?)
+    let detectedKey = 'rata_rata';
+    if (safeHistory.length > 0) {
+        const sampleItem = safeHistory[0];
+        // Cari nama kunci yang dipakai untuk menyimpan angka (selain periode)
+        const foundKey = Object.keys(sampleItem).find(k => 
+            k !== 'periode' && k !== 'karyawan_id' && k !== 'id'
+        );
+        if (foundKey) {
+            detectedKey = foundKey;
+        }
+    }
+
+    // 7B. Buang data bulan ini bawaan database (karena rawan bocor gabungan)
     safeHistory = safeHistory.filter(item => {
         if (item.periode && periode) {
              return item.periode.toLowerCase().trim() !== periode.toLowerCase().trim();
@@ -634,26 +648,41 @@ export async function fetchAssessmentData(karyawanId, periode) {
         return true;
     });
 
-    // 7B. Hitung manual rata-rata SAAT INI (Hanya dari KPI yang SUDAH diisi Nabila)
+    // 7C. Hitung manual rata-rata SAAT INI (Presisi Ekstra Ketat)
     let myTotalScore = 0;
-    let filledKpiCount = 0; 
+    let filledKpiCount = 0;
 
-    Object.values(scoresMap).forEach(score => {
-        // Konversi ke angka secara ketat. Abaikan jika kosong, null, atau bukan angka
-        const numScore = Number(score);
-        if (score !== null && score !== '' && !isNaN(numScore)) {
-            myTotalScore += numScore;
-            filledKpiCount += 1; // Hanya tambah pembagi jika kolom ini sudah dinilai
+    // Kita looping berdasarkan KPI Master agar dijamin hanya membaca nilai yang sah
+    kpis.forEach(kpi => {
+        const score = scoresMap[kpi.id];
+        if (score !== undefined && score !== null && score !== '') {
+            const numScore = parseFloat(score);
+            // Pastikan yang dihitung benar-benar format Angka, bukan Teks kosong
+            if (!isNaN(numScore)) {
+                myTotalScore += numScore;
+                filledKpiCount += 1; // Hanya tambah pembagi jika kolom ini sudah dinilai
+            }
         }
     });
 
-    // 7C. Kembalikan hak Nabila! Jika sudah ngisi minimal 1 nilai, suntikkan rata-ratanya ke grafik
+    // 7D. Suntikkan nilai ke grafik dengan TEBAR JARING KUNCI
     if (filledKpiCount > 0) {
         const safeAverage = Number((myTotalScore / filledKpiCount).toFixed(2));
-        safeHistory.push({
+        
+        const newGraphItem = {
             periode: periode,
-            rata_rata: safeAverage
-        });
+            [detectedKey]: safeAverage, // 1. Pakai kunci yang terdeteksi dari DB
+            
+            // 2. JARING PENGAMAN (Pasti salah satu dari ini yang dipakai oleh komponen Grafik Kakak)
+            rata_rata: safeAverage,
+            nilai: safeAverage,
+            skor: safeAverage,
+            nilai_akhir: safeAverage,
+            total: safeAverage,
+            average: safeAverage
+        };
+        
+        safeHistory.push(newGraphItem);
     }
 
     return {
@@ -662,12 +691,11 @@ export async function fetchAssessmentData(karyawanId, periode) {
         generalNote: finalGeneralNote, 
         recommendations: recommendationsResult.data || [],
         areaScores: safeAreaScores, 
-        kpiHistory: safeHistory, 
+        kpiHistory: safeHistory, // <-- Histori yang sudah dijamin terbaca oleh grafik
         gapWarnings: gapWarnings,
         isDataFound: Object.keys(scoresMap).length > 0
     };
 }
-
 // src/app/actions.js
 
 export async function saveFullAssessment(formData) {
