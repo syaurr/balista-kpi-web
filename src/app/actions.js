@@ -624,21 +624,41 @@ export async function fetchAssessmentData(karyawanId, periode) {
 
     // --- 7. 🛡️ PENJAGA PINTU GRAFIK HISTORI ---
     let safeHistory = historyResult.data || [];
+    
+    // 7A. Buang data bulan ini bawaan database (karena rawan bocor gabungan 2 Assessor)
     safeHistory = safeHistory.filter(item => {
-        // Gunakan toLowerCase() agar "Maret 2026" tidak tembus karena beda huruf dengan "maret 2026"
         if (item.periode && periode) {
              return item.periode.toLowerCase().trim() !== periode.toLowerCase().trim();
         }
         return true;
     });
 
+    // 7B. Hitung manual rata-rata keseluruhan khusus dari nilai aman di layar saat ini (scoresMap)
+    let currentTotalScore = 0;
+    let currentScoreCount = 0;
+    Object.values(scoresMap).forEach(score => {
+        if (score !== undefined && score !== null) {
+            currentTotalScore += Number(score);
+            currentScoreCount += 1;
+        }
+    });
+
+    // 7C. Kembalikan hak Nabila! Jika dia sudah ngisi nilai, suntikkan rata-ratanya ke grafik
+    if (currentScoreCount > 0) {
+        const safeAverage = Number((currentTotalScore / currentScoreCount).toFixed(2));
+        safeHistory.push({
+            periode: periode,
+            rata_rata: safeAverage
+        });
+    }
+
     return {
         kpis: kpis || [],
         scores: scoresMap,
         generalNote: finalGeneralNote, 
         recommendations: recommendationsResult.data || [],
-        areaScores: safeAreaScores, // <-- GUNAKAN HASIL HITUNG MANUAL YANG AMAN
-        kpiHistory: safeHistory,    // <-- GUNAKAN HISTORI YANG SUDAH KEBAL TYPO
+        areaScores: safeAreaScores, 
+        kpiHistory: safeHistory, // <-- Histori yang sudah disuntik nilai amannya sendiri
         gapWarnings: gapWarnings,
         isDataFound: Object.keys(scoresMap).length > 0
     };
