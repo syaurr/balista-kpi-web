@@ -634,19 +634,22 @@ export async function fetchAssessmentData(karyawanId, periode) {
         return true;
     });
 
-    // 7B. Hitung manual rata-rata SAAT INI berdasarkan seluruh master KPI
+    // 7B. Hitung manual rata-rata SAAT INI (Hanya dari KPI yang SUDAH diisi Nabila)
     let myTotalScore = 0;
-    let totalKpiItems = kpis.length; 
+    let filledKpiCount = 0; 
 
     Object.values(scoresMap).forEach(score => {
-        if (score !== undefined && score !== null) {
-            myTotalScore += Number(score);
+        // Konversi ke angka secara ketat. Abaikan jika kosong, null, atau bukan angka
+        const numScore = Number(score);
+        if (score !== null && score !== '' && !isNaN(numScore)) {
+            myTotalScore += numScore;
+            filledKpiCount += 1; // Hanya tambah pembagi jika kolom ini sudah dinilai
         }
     });
 
-    // 7C. Kembalikan hak Nabila/Tria! Jika sudah ngisi nilai, suntikkan rata-ratanya ke grafik
-    if (Object.keys(scoresMap).length > 0 && totalKpiItems > 0) {
-        const safeAverage = Number((myTotalScore / totalKpiItems).toFixed(2));
+    // 7C. Kembalikan hak Nabila! Jika sudah ngisi minimal 1 nilai, suntikkan rata-ratanya ke grafik
+    if (filledKpiCount > 0) {
+        const safeAverage = Number((myTotalScore / filledKpiCount).toFixed(2));
         safeHistory.push({
             periode: periode,
             rata_rata: safeAverage
