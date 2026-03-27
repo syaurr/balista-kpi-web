@@ -551,7 +551,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
     const scoresMap = {};
     if (allScoresResult.data) {
         allScoresResult.data.forEach(s => {
-            // ATURAN 1 (ANTI BOCOR): Buang nilai milik Partner Assessor (misal Nabila)
+            // ATURAN 1 (ANTI BOCOR): Buang nilai milik Partner Assessor
             if (partnerAssessorId && s.penilai_id === partnerAssessorId) {
                 return; 
             }
@@ -560,7 +560,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
             if (s.penilai_id === activePenilai.id) {
                 scoresMap[s.kpi_master_id] = s.nilai;
             } 
-            // ATURAN 3: Jika ini nilai dari Admin/Sistem Lama (seperti bulan Desember), Tampilkan!
+            // ATURAN 3: Jika ini nilai dari Admin/Sistem Lama, Tampilkan!
             else if (!scoresMap[s.kpi_master_id]) {
                 scoresMap[s.kpi_master_id] = s.nilai;
             }
@@ -606,6 +606,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
         });
     }
 
+    // --- 6. 🛡️ PENJAGA PINTU GRAFIK AREA & NILAI AKHIR (ANTI-BOCOR) ---
     const areaCalc = {};
     kpis.forEach(kpi => {
         const score = scoresMap[kpi.id];
@@ -633,19 +634,19 @@ export async function fetchAssessmentData(karyawanId, periode) {
         return true;
     });
 
-    // 7B. Hitung manual rata-rata keseluruhan khusus dari nilai aman di layar saat ini (scoresMap)
-    let currentTotalScore = 0;
-    let currentScoreCount = 0;
+    // 7B. Hitung manual rata-rata SAAT INI berdasarkan seluruh master KPI
+    let myTotalScore = 0;
+    let totalKpiItems = kpis.length; 
+
     Object.values(scoresMap).forEach(score => {
         if (score !== undefined && score !== null) {
-            currentTotalScore += Number(score);
-            currentScoreCount += 1;
+            myTotalScore += Number(score);
         }
     });
 
-    // 7C. Kembalikan hak Nabila! Jika dia sudah ngisi nilai, suntikkan rata-ratanya ke grafik
-    if (currentScoreCount > 0) {
-        const safeAverage = Number((currentTotalScore / currentScoreCount).toFixed(2));
+    // 7C. Kembalikan hak Nabila/Tria! Jika sudah ngisi nilai, suntikkan rata-ratanya ke grafik
+    if (Object.keys(scoresMap).length > 0 && totalKpiItems > 0) {
+        const safeAverage = Number((myTotalScore / totalKpiItems).toFixed(2));
         safeHistory.push({
             periode: periode,
             rata_rata: safeAverage
@@ -658,7 +659,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
         generalNote: finalGeneralNote, 
         recommendations: recommendationsResult.data || [],
         areaScores: safeAreaScores, 
-        kpiHistory: safeHistory, // <-- Histori yang sudah disuntik nilai amannya sendiri
+        kpiHistory: safeHistory, 
         gapWarnings: gapWarnings,
         isDataFound: Object.keys(scoresMap).length > 0
     };
