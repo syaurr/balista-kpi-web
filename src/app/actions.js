@@ -524,30 +524,41 @@ export async function fetchAssessmentData(karyawanId, periode) {
 
     const { data: kpis } = await supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', targetKaryawan.posisi).eq('is_active', true).order('area');
 
-    // 3. FILTER "MATA PENUTUP" (Hanya ambil nilainya sendiri, ATAU nilai lama yang penilai_id-nya null)
-    const penilaiFilter = `penilai_id.eq.${activePenilai.id},penilai_id.is.null`;
-
+    // 3. OPSI A: TRANSPARANSI PENUH (Ambil semua nilai tanpa peduli ID Penilainya)
     const [
-        scoresResult, 
-        summaryResult, 
+        allScoresResult, 
+        allSummaryResult, 
         recommendationsResult, 
         areaScoresResult, 
         historyResult
     ] = await Promise.all([
-        supabase.from('penilaian_kpi').select('kpi_master_id, nilai').eq('karyawan_id', karyawanId).eq('periode', periode).or(penilaiFilter),
-        supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).or(penilaiFilter).limit(1).maybeSingle(),
-        
-        // --- KUNCI FIX REKOMENDASI: Jangan pakai .or(penilaiFilter) di baris ini! ---
+        supabase.from('penilaian_kpi').select('kpi_master_id, nilai, penilai_id').eq('karyawan_id', karyawanId).eq('periode', periode),
+        supabase.from('penilaian_summary').select('catatan_kpi, penilai_id').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.from('kpi_summary_recommendations').select('id, rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
-        // ----------------------------------------------------------------------------
-        
         supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
         supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId })
     ]);
 
+    // 4. SMART FILTER: Prioritaskan nilai milik sendiri, kalau kosong ambil dari histori orang lain (Admin/Atasan lama)
     const scoresMap = {};
-    scoresResult.data?.forEach(s => { scoresMap[s.kpi_master_id] = s.nilai; });
+    if (allScoresResult.data) {
+        allScoresResult.data.forEach(s => {
+            if (!scoresMap[s.kpi_master_id]) {
+                scoresMap[s.kpi_master_id] = s.nilai; // Masukkan nilai historis dari siapa saja (Admin/Atasan lama)
+            } else if (s.penilai_id === activePenilai.id) {
+                scoresMap[s.kpi_master_id] = s.nilai; // Timpa jika ini nilai ketikan Assessor sendiri
+            }
+        });
+    }
 
+    let finalGeneralNote = '';
+    if (allSummaryResult.data && allSummaryResult.data.length > 0) {
+        // Cari catatan milik sendiri dulu, kalau tidak ada, pakai catatan historis orang lain
+        const mySummary = allSummaryResult.data.find(sum => sum.penilai_id === activePenilai.id);
+        finalGeneralNote = mySummary ? mySummary.catatan_kpi : allSummaryResult.data[0].catatan_kpi;
+    }
+
+    // 5. Cek Gap Assessment (Sistem 2 Assessor)
     const { data: allScoresForGap } = await supabase
         .from('penilaian_kpi')
         .select('kpi_master_id, kpi_deskripsi, nilai, penilai_id')
@@ -556,14 +567,12 @@ export async function fetchAssessmentData(karyawanId, periode) {
 
     const gapWarnings = [];
     if (allScoresForGap && allScoresForGap.length > 0) {
-        // Kelompokkan nilai berdasarkan KPI
         const scoresByKpi = {};
         allScoresForGap.forEach(s => {
             if (!scoresByKpi[s.kpi_master_id]) scoresByKpi[s.kpi_master_id] = { deskripsi: s.kpi_deskripsi, scores: [] };
             scoresByKpi[s.kpi_master_id].scores.push(s.nilai);
         });
 
-        // Cek jika ada KPI yang dinilai oleh >= 2 orang, apakah selisih Max dan Min > 20
         Object.values(scoresByKpi).forEach(kpi => {
             if (kpi.scores.length > 1) {
                 const maxScore = Math.max(...kpi.scores);
@@ -574,17 +583,16 @@ export async function fetchAssessmentData(karyawanId, periode) {
             }
         });
     }
-    // ------------------------------------
 
     return {
         kpis: kpis || [],
         scores: scoresMap,
-        generalNote: summaryResult.data?.catatan_kpi || '', 
+        generalNote: finalGeneralNote, 
         recommendations: recommendationsResult.data || [],
         areaScores: areaScoresResult.data || [],
         kpiHistory: historyResult.data || [],
-        gapWarnings: gapWarnings, // <-- KIRIM PERINGATAN KE UI
-        isDataFound: (scoresResult.data?.length || 0) > 0
+        gapWarnings: gapWarnings,
+        isDataFound: Object.keys(scoresMap).length > 0 // Akurasi tinggi pendeteksi data
     };
 }
 
