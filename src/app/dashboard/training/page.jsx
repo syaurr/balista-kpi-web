@@ -3,11 +3,20 @@ import { cookies } from 'next/headers';
 import TrainingMarketplaceClient from '../../../components/TrainingMarketplaceClient';
 
 async function getMarketplaceData() {
-    const supabase = createClient(cookies());
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { trainings: [], allAreas: [] };
+    // 1. Perbaikan: Await cookies dan createClient
+    const cookieStore = await cookies();
+    const supabase = await createClient(); 
 
-    // 1. Ambil profil karyawan untuk mendapatkan ID dan Posisi
+    // 2. Ambil user dengan aman
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    // Jika tidak ada user atau error auth, langsung return kosong
+    if (authError || !user) {
+        console.error("Auth error atau user tidak ditemukan");
+        return { trainings: [], allAreas: [] };
+    }
+
+    // 3. Ambil profil karyawan
     const { data: karyawan } = await supabase
         .from('karyawan')
         .select('id, posisi')
@@ -20,40 +29,38 @@ async function getMarketplaceData() {
     }
     const userPosition = karyawan.posisi;
 
-    // --- AWAL PERBAIKAN LOGIKA ---
-    // 2. Dapatkan daftar ID dari training yang sudah AKTIF diikuti atau SELESAI
+    // 4. Dapatkan daftar ID training yang sudah diambil
     const { data: enrolledPlans } = await supabase
         .from('karyawan_training_plan')
         .select('training_program_id')
         .eq('karyawan_id', karyawan.id)
-        // Hanya kecualikan yang sudah benar-benar diambil
         .in('status', ['Sedang Berjalan', 'Menunggu Verifikasi', 'Selesai']);
 
     const enrolledTrainingIds = enrolledPlans?.map(plan => plan.training_program_id) || [];
-    // --- AKHIR PERBAIKAN LOGIKA ---
 
-    // 3. Bangun query dasar untuk mengambil training yang aktif
+    // 5. Bangun query training
     let query = supabase
         .from('training_programs')
         .select('*, training_area_link(area_name)')
         .in('status', ['Akan Datang', 'Berlangsung']);
 
-    // 4. Tambahkan filter berdasarkan posisi user
+    // Filter posisi
     if (userPosition) {
         query = query.or(`posisi.cs.{"${userPosition}"},posisi.is.null`);
     } else {
         query = query.is('posisi', null);
     }
     
-    // 5. KECUALIKAN training yang ID-nya sudah ada di daftar 'enrolledTrainingIds'
+    // Eksklusi yang sudah terdaftar (PENTING: Hanya jalankan filter 'not' jika array tidak kosong)
     if (enrolledTrainingIds.length > 0) {
         query = query.not('id', 'in', `(${enrolledTrainingIds.join(',')})`);
     }
     
-    const { data: trainings, error } = await query.order('created_at', { ascending: false });
+    const { data: trainings, error: trainingError } = await query.order('created_at', { ascending: false });
 
-    if (error) console.error("Fetch marketplace error:", error);
+    if (trainingError) console.error("Fetch training error:", trainingError);
     
+    // 6. Ambil area dari kpi_master
     const { data: areasData } = await supabase.from('kpi_master').select('area').neq('area', null);
     const allAreas = [...new Set(areasData?.map(item => item.area) || [])];
 
@@ -64,7 +71,9 @@ async function getMarketplaceData() {
 }
 
 export default async function TrainingMarketplacePage() {
+    // Panggil fungsi data
     const { trainings, allAreas } = await getMarketplaceData();
+    
     return (
         <div>
             <h1 className="text-3xl font-bold text-[#022020] mb-6">Training Marketplace</h1>
