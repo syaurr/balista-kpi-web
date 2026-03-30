@@ -575,7 +575,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
             if (kpi.scores.length > 1) {
                 const maxScore = Math.max(...kpi.scores);
                 const minScore = Math.min(...kpi.scores);
-                if ((maxScore - minScore) >= 20) gapWarnings.push(kpi.deskripsi);
+                if ((maxScore - minScore) >= 10) gapWarnings.push(kpi.deskripsi);
             }
         });
     }

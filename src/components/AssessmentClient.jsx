@@ -334,7 +334,7 @@ export default function AssessmentClient({ employees, initialAssessmentData }) {
                                     <div>
                                         <h3 className="font-bold text-yellow-800">Perhatian: Ada Perbedaan Persepsi Penilaian</h3>
                                         <p className="text-sm text-yellow-700">
-                                            Sistem mendeteksi selisih nilai <span className="font-bold underline">lebih dari 20 poin</span> dengan penilai lain pada KPI berikut: 
+                                            Sistem mendeteksi selisih nilai <span className="font-bold underline">lebih dari 10 poin</span> dengan penilai lain pada KPI berikut: 
                                             <span className="font-bold"> {gapWarnings.join(', ')}</span>. 
                                             Harap diskusikan dengan penilai lain untuk menyelaraskan ekspektasi kinerja.
                                         </p>
