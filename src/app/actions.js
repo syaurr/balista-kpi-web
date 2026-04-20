@@ -1,5 +1,5 @@
 'use server';
-'use server';
+import { unstable_noStore as noStore } from 'next/cache';
 import { cookies } from 'next/headers';
 // --- AWAL PERBAIKAN: Perbaiki path import ---
 import { createClient } from '../utils/supabase/server';
@@ -497,6 +497,7 @@ export async function getAssessmentDataLogic(supabase, karyawanId, periode) {
 }
 
 export async function fetchAssessmentData(karyawanId, periode) {
+    noStore();
     const supabase = await createClient();
     if (!karyawanId || !periode) return null;
 
@@ -539,6 +540,9 @@ export async function fetchAssessmentData(karyawanId, periode) {
         supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
         supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId }) // <-- RPC IS BACK!
     ]);
+    console.log("=== CCTV DATA REZA DARI SUPABASE ===");
+    console.log(historyResult.data?.find(h => h.periode === periode));
+    console.log("====================================");
 
     const scoresMap = {};
     if (allScoresResult.data) {
