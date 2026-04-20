@@ -596,75 +596,35 @@ export async function fetchAssessmentData(karyawanId, periode) {
         rata_rata: Number((areaCalc[area].total / areaCalc[area].count).toFixed(2))
     }));
 
-    // --- 7. 🛡️ PENJAGA PINTU GRAFIK (DISEMPURNAKAN) ---
+    // --- 7. 🛡️ PENJAGA PINTU GRAFIK (PERCAYAKAN PADA DATABASE) ---
     let safeHistory = historyResult.data || [];
 
     // 7A. Usir hantu "null" dari database
     safeHistory = safeHistory.filter(item => item.periode && item.periode.trim() !== '' && item.periode !== 'null');
 
-    // 7B. Hapus bulan saat ini dari RPC (karena kita akan hitung manual agar super akurat)
+    // 7B. Cari tanggal bulan yang sedang aktif (untuk mesin waktu)
     let currentMonthSortable = null;
-    safeHistory = safeHistory.filter(item => {
-        if (item.periode.toLowerCase().trim() === periode.toLowerCase().trim()) {
-            currentMonthSortable = item.periode_sortable;
-            return false;
-        }
-        return true;
-    });
-
-    // 7C. Hitung Manual Bulan Ini (Pakai RUMUS BOBOT UI)
-    let myTotalScore = 0;
-    let totalBobotYangDinilai = 0;
-
-    kpis.forEach(kpi => {
-        const score = scoresMap[kpi.id];
-        if (score !== undefined && score !== null && score !== '') {
-            const numScore = parseFloat(score);
-            if (!isNaN(numScore)) {
-                myTotalScore += numScore * (kpi.bobot / 100.0);
-                if (numScore > 0) {
-                    totalBobotYangDinilai += kpi.bobot;
-                }
-            }
-        }
-    });
-
-    // 7D. Masukkan hasil hitung manual ke grafik
-    if (totalBobotYangDinilai > 0 || myTotalScore > 0) {
-        const safeProporsional = totalBobotYangDinilai > 0 ? (myTotalScore / (totalBobotYangDinilai / 100.0)) : 0;
-        
-        // Buat format tanggal jika currentMonthSortable kosong
-        if (!currentMonthSortable) {
-            const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-            const parts = periode.split(' ');
-            const bIdx = monthNames.indexOf(parts[0]);
-            currentMonthSortable = (bIdx !== -1 && parts[1]) ? `${parts[1]}-${String(bIdx + 1).padStart(2, '0')}-01` : periode;
-        }
-
-        safeHistory.push({
-            periode: periode,
-            periode_sortable: currentMonthSortable,
-            total_nilai_akhir: Number(myTotalScore.toFixed(2)),
-            nilai_proporsional: Number(safeProporsional.toFixed(2))
-        });
+    const currentData = safeHistory.find(item => item.periode.toLowerCase().trim() === periode.toLowerCase().trim());
+    
+    if (currentData) {
+        currentMonthSortable = currentData.periode_sortable;
+    } else {
+        // Fallback jika belum ada data sama sekali di bulan ini
+        const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+        const parts = periode.split(' ');
+        const bIdx = monthNames.indexOf(parts[0]);
+        currentMonthSortable = (bIdx !== -1 && parts[1]) ? `${parts[1]}-${String(bIdx + 1).padStart(2, '0')}-01` : periode;
     }
 
-    // 7E. FILTER MESIN WAKTU (Cegah Januari bocor ke Desember) & FIX 166.04
+    // 7C. FILTER MESIN WAKTU (Cegah bulan depan bocor ke grafik)
     safeHistory = safeHistory.filter(item => {
-        // Jika sedang buka Desember (misal 2025-12-01), buang Januari (2026-01-01)
         if (currentMonthSortable && item.periode_sortable && item.periode_sortable > currentMonthSortable) {
             return false;
         }
         return true;
-    }).map(item => {
-        // Tembel bug Database yang menjumlahkan 2 Assessor jadi 166.04!
-        if (item.total_nilai_akhir > 100) {
-            item.total_nilai_akhir = Number((item.total_nilai_akhir / 2).toFixed(2));
-        }
-        return item;
     });
 
-    // 7F. Urutkan rapi dari kiri ke kanan (Mencegah Januari lompat ke kiri)
+    // 7D. Urutkan rapi dari kiri ke kanan (Berdasarkan waktu)
     safeHistory.sort((a, b) => {
         if (!a.periode_sortable || !b.periode_sortable) return 0;
         return a.periode_sortable.localeCompare(b.periode_sortable);
