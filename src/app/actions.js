@@ -600,27 +600,83 @@ export async function fetchAssessmentData(karyawanId, periode) {
         rata_rata: Number((areaCalc[area].total / areaCalc[area].count).toFixed(2))
     }));
 
-    // --- 7. 🛡️ PENJAGA PINTU GRAFIK (PERCAYAKAN PADA DATABASE) ---
+   // --- 7. 🛡️ PENJAGA PINTU GRAFIK (DIKEMBALIKAN DENGAN LOGIKA MURNI KAK TASYA) ---
     let safeHistory = historyResult.data || [];
 
     // 7A. Usir hantu "null" dari database
     safeHistory = safeHistory.filter(item => item.periode && item.periode.trim() !== '' && item.periode !== 'null');
 
-    // 7B. Cari tanggal bulan yang sedang aktif (untuk mesin waktu)
+    // 7B. Hapus bulan saat ini dari RPC (Kita akan hitung secara LIVE & MURNI)
     let currentMonthSortable = null;
-    const currentData = safeHistory.find(item => item.periode.toLowerCase().trim() === periode.toLowerCase().trim());
-    
-    if (currentData) {
-        currentMonthSortable = currentData.periode_sortable;
-    } else {
-        // Fallback jika belum ada data sama sekali di bulan ini
-        const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-        const parts = periode.split(' ');
-        const bIdx = monthNames.indexOf(parts[0]);
-        currentMonthSortable = (bIdx !== -1 && parts[1]) ? `${parts[1]}-${String(bIdx + 1).padStart(2, '0')}-01` : periode;
+    safeHistory = safeHistory.filter(item => {
+        if (item.periode.toLowerCase().trim() === periode.toLowerCase().trim()) {
+            currentMonthSortable = item.periode_sortable;
+            return false;
+        }
+        return true;
+    });
+
+    // 7C. HITUNG MANUAL BULAN INI PAKAI LOGIKA MURNI (Assessor 1 + Assessor 2) / 2
+    let totalAkhirMurni = 0;
+    let proporsionalMurni = 0;
+
+    // Kita sedot datanya dari allScoresForGap karena nilai KEDUA ASSESSOR ada di sini!
+    if (allScoresForGap && allScoresForGap.length > 0) {
+        const penilaiGroups = {};
+        
+        // Kelompokkan kertas ujian berdasarkan ID Penilai
+        allScoresForGap.forEach(s => {
+            if (!penilaiGroups[s.penilai_id]) penilaiGroups[s.penilai_id] = [];
+            penilaiGroups[s.penilai_id].push(s);
+        });
+
+        // Hitung Rapor masing-masing Penilai secara adil
+        const raporIndividu = Object.values(penilaiGroups).map(scores => {
+            let nilaiAkhir = 0;
+            let bobotTerisi = 0;
+            
+            scores.forEach(s => {
+                const kpiInfo = kpis.find(k => k.id === s.kpi_master_id);
+                if (kpiInfo) {
+                    const numScore = parseFloat(s.nilai) || 0;
+                    nilaiAkhir += numScore * (kpiInfo.bobot / 100.0);
+                    if (numScore > 0) {
+                        bobotTerisi += kpiInfo.bobot;
+                    }
+                }
+            });
+
+            return {
+                akhir: nilaiAkhir,
+                proporsional: bobotTerisi > 0 ? (nilaiAkhir / (bobotTerisi / 100.0)) : 0
+            };
+        });
+
+        // Leburkan rapor menjadi satu (Nilai Murni Akhir)
+        if (raporIndividu.length > 0) {
+            totalAkhirMurni = raporIndividu.reduce((acc, curr) => acc + curr.akhir, 0) / raporIndividu.length;
+            proporsionalMurni = raporIndividu.reduce((acc, curr) => acc + curr.proporsional, 0) / raporIndividu.length;
+        }
     }
 
-    // 7C. FILTER MESIN WAKTU (Cegah bulan depan bocor ke grafik)
+    // 7D. Masukkan hasil Logika Murni ke dalam grafik UI
+    if (totalAkhirMurni > 0 || proporsionalMurni > 0) {
+        if (!currentMonthSortable) {
+            const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+            const parts = periode.split(' ');
+            const bIdx = monthNames.indexOf(parts[0]);
+            currentMonthSortable = (bIdx !== -1 && parts[1]) ? `${parts[1]}-${String(bIdx + 1).padStart(2, '0')}-01` : periode;
+        }
+
+        safeHistory.push({
+            periode: periode,
+            periode_sortable: currentMonthSortable,
+            total_nilai_akhir: Number(totalAkhirMurni.toFixed(2)),
+            nilai_proporsional: Number(proporsionalMurni.toFixed(2))
+        });
+    }
+
+    // 7E. FILTER MESIN WAKTU (Mencegah masa depan bocor ke grafik)
     safeHistory = safeHistory.filter(item => {
         if (currentMonthSortable && item.periode_sortable && item.periode_sortable > currentMonthSortable) {
             return false;
@@ -628,7 +684,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
         return true;
     });
 
-    // 7D. Urutkan rapi dari kiri ke kanan (Berdasarkan waktu)
+    // 7F. Urutkan rapi secara kronologis
     safeHistory.sort((a, b) => {
         if (!a.periode_sortable || !b.periode_sortable) return 0;
         return a.periode_sortable.localeCompare(b.periode_sortable);
