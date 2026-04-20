@@ -11,6 +11,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 
 export async function getDashboardPageData(periode) {
+  noStore();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { user: null, data: null, error: 'User not authenticated' };
@@ -40,6 +41,9 @@ export async function getDashboardPageData(periode) {
     // <--- 2. Ambil detail nilai per penilai
     supabase.from('penilaian_kpi').select('kpi_master_id, kpi_deskripsi, bobot, nilai, penilai:karyawan!penilai_id(nama)').eq('karyawan_id', karyawanId).eq('periode', periode)
   ]);
+
+  console.log("=== CCTV DASHBOARD REZA YANG ASLI ===");
+  console.log(kpiHistoryResult.data);
 
   const pendingTaskCount = pendingTasksResult.data?.filter(task => task.behavioral_results.length === 0).length || 0;
   const combinedSummary = summaryResult.data?.map(s => s.catatan_kpi).filter(Boolean).join('\n\n---\n\n') || `Belum ada catatan umum untuk periode ${periode}.`;
@@ -540,6 +544,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
         supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
         supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId }) // <-- RPC IS BACK!
     ]);
+    
     console.log("=== CCTV DATA REZA DARI SUPABASE ===");
     console.log(historyResult.data?.find(h => h.periode === periode));
     console.log("====================================");

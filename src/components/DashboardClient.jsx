@@ -150,30 +150,21 @@ export default function DashboardClient({ user, initialData, initialMonth, initi
         }
     };
 
-    // --- AWAL PERBAIKAN LOGIKA PROPORSIONAL ---
+    // --- MENGAMBIL NILAI MURNI LANGSUNG DARI DATABASE ---
     const { totalNilaiAkhir, nilaiProporsional } = useMemo(() => {
-        if (!rekap || rekap.length === 0) {
-            return { totalNilaiAkhir: 0, nilaiProporsional: 0 };
+        // Cari data bulan ini di dalam kpiHistory yang sudah dihitung pakai Logika Murni di Supabase
+        const currentData = kpiHistory?.find(item => item.periode.toLowerCase().trim() === periode.toLowerCase().trim());
+        
+        if (currentData) {
+            return {
+                totalNilaiAkhir: currentData.total_nilai_akhir,
+                nilaiProporsional: currentData.nilai_proporsional
+            };
         }
 
-        let total = 0;
-        let totalBobotYangDinilai = 0;
-
-        rekap.forEach(item => {
-            // Total Nilai Akhir dihitung dari semua KPI yang ada
-            total += parseFloat(item.nilai_akhir || 0);
-            
-            // Total Bobot HANYA dihitung dari KPI yang skornya > 0,
-            // tidak peduli frekuensinya apa.
-            if (item.skor_aktual > 0) {
-                totalBobotYangDinilai += item.bobot;
-            }
-        });
-        
-        const proporsional = totalBobotYangDinilai > 0 ? (total / (totalBobotYangDinilai / 100.0)) : 0;
-        return { totalNilaiAkhir: total, nilaiProporsional: proporsional };
-    }, [rekap]);
-    // --- AKHIR PERBAIKAN LOGIKA PROPORSIONAL ---
+        return { totalNilaiAkhir: 0, nilaiProporsional: 0 };
+    }, [kpiHistory, periode]);
+    // --- AKHIR PENGAMBILAN NILAI MURNI ---
     
     const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
     const months = Array.from({ length: 12 }, (_, i) => ({
