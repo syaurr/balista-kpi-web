@@ -457,22 +457,31 @@ export async function getAssessmentDataLogic(supabase, karyawanId, periode) {
         return { kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [] };
     }
     
-    // Kita kembali gunakan RPC yang sudah terbukti benar untuk chart
     const [kpisResult, scoresResult, summaryResult, recommendationsResult, areaScoresResult] = await Promise.all([
-        supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', karyawan.posisi).eq('is_active', true).order('area_kerja'),
+        // ❌ PERBAIKAN 1: Hapus .eq('is_active', true) agar KPI non-aktif ikut tersedot dulu
+        supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', karyawan.posisi).order('area_kerja'),
         supabase.from('penilaian_kpi').select('kpi_master_id, nilai').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single(),
         supabase.from('kpi_summary_recommendations').select('id, rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId }) 
     ]);
 
+    // Bikin mapping nilai dulu biar gampang dicari
     const scoresMap = scoresResult.data?.reduce((acc, score) => {
         acc[score.kpi_master_id] = score.nilai;
         return acc;
     }, {}) || {};
     
+    // ✅ PERBAIKAN 2: Filter Cerdas "Hantu Soft-Delete"
+    const rawKpis = kpisResult.data || [];
+    const filteredKpis = rawKpis.filter(kpi => {
+        if (kpi.is_active) return true; // Kalau aktif, pasti lolos
+        // Kalau non-aktif, cek di scoresMap. Kalau dia ada nilainya di bulan ini, loloskan!
+        return scoresMap[kpi.id] !== undefined; 
+    });
+    
     const finalResult = {
-        kpis: kpisResult.data || [],
+        kpis: filteredKpis, // <-- Gunakan kpi yang sudah difilter
         scores: scoresMap,
         generalNote: summaryResult.data?.catatan_kpi || '',
         recommendations: recommendationsResult.data || [],
@@ -480,8 +489,6 @@ export async function getAssessmentDataLogic(supabase, karyawanId, periode) {
     };
     return finalResult;
 }
-
-// Di dalam file: src/app/actions.js
 
 export async function fetchAssessmentData(karyawanId, periode) {
     const supabase = createClient();
@@ -500,14 +507,14 @@ export async function fetchAssessmentData(karyawanId, periode) {
         summaryResult, 
         recommendationsResult, 
         areaScoresResult,
-        kpiHistoryResult // <-- TAMBAHAN BARU
+        kpiHistoryResult 
     ] = await Promise.all([
-        supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', karyawan.posisi).eq('is_active', true).order('area_kerja'),
+        // ❌ PERBAIKAN 1: Hapus .eq('is_active', true)
+        supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', karyawan.posisi).order('area_kerja'),
         supabase.from('penilaian_kpi').select('kpi_master_id, nilai').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single(),
         supabase.from('kpi_summary_recommendations').select('id, rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
-        // --- PANGGILAN BARU: Ambil data riwayat untuk karyawan yang dipilih ---
         supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId })
     ]);
     
@@ -518,13 +525,21 @@ export async function fetchAssessmentData(karyawanId, periode) {
         return acc;
     }, {}) || {};
 
+    // ✅ PERBAIKAN 2: Filter Cerdas "Hantu Soft-Delete"
+    const rawKpis = kpisResult.data || [];
+    const filteredKpis = rawKpis.filter(kpi => {
+        if (kpi.is_active) return true; // Kalau aktif, lolos
+        // Kalau non-aktif tapi pernah dinilai di periode ini, bangkitkan hantunya!
+        return scoresMap[kpi.id] !== undefined; 
+    });
+
     return {
-        kpis: kpisResult.data || [],
+        kpis: filteredKpis, // <-- Gunakan KPI hasil filter cerdas
         scores: scoresMap,
         generalNote: summaryResult.data?.catatan_kpi || '',
         recommendations: recommendationsResult.data || [],
         areaScores: areaScoresResult.data || [],
-        kpiHistory: kpiHistoryResult.data || [] // <-- KIRIM DATA BARU
+        kpiHistory: kpiHistoryResult.data || [] 
     };
 }
 
