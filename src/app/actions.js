@@ -478,7 +478,8 @@ export async function getAssessmentDataLogic(supabase, karyawanId, periode) {
     
     // Kita kembali gunakan RPC yang sudah terbukti benar untuk chart
     const [kpisResult, scoresResult, summaryResult, recommendationsResult, areaScoresResult] = await Promise.all([
-        supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', karyawan.posisi).eq('is_active', true).order('area_kerja'),
+        // ❌ PERBAIKAN 1: Hapus .eq('is_active', true) agar KPI non-aktif ikut tersedot
+        supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', karyawan.posisi).order('area_kerja'),
         supabase.from('penilaian_kpi').select('kpi_master_id, nilai').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single(),
         supabase.from('kpi_summary_recommendations').select('id, rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
@@ -490,8 +491,15 @@ export async function getAssessmentDataLogic(supabase, karyawanId, periode) {
         return acc;
     }, {}) || {};
     
+    // ✅ PERBAIKAN 2: Filter Cerdas "Hantu Soft-Delete"
+    const rawKpis = kpisResult.data || [];
+    const filteredKpis = rawKpis.filter(kpi => {
+        if (kpi.is_active) return true; // Lolos jika aktif
+        return scoresMap[kpi.id] !== undefined; // Lolos jika punya nilai di bulan ini
+    });
+
     const finalResult = {
-        kpis: kpisResult.data || [],
+        kpis: filteredKpis, // <-- Gunakan KPI hasil saringan
         scores: scoresMap,
         generalNote: summaryResult.data?.catatan_kpi || '',
         recommendations: recommendationsResult.data || [],
@@ -521,7 +529,8 @@ export async function fetchAssessmentData(karyawanId, periode) {
     const { data: targetKaryawan } = await supabase.from('karyawan').select('posisi, superior_id, superior_id_2').eq('id', karyawanId).single();
     if (!targetKaryawan) return null;
 
-    const { data: kpis } = await supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', targetKaryawan.posisi).eq('is_active', true).order('area');
+    // ❌ PERBAIKAN 1: Hapus .eq('is_active', true) dan ubah nama variabel jadi rawKpis
+    const { data: rawKpis } = await supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', targetKaryawan.posisi).order('area');
 
     let partnerAssessorId = null;
     if (activePenilai.id === targetKaryawan.superior_id && targetKaryawan.superior_id !== targetKaryawan.superior_id_2) {
@@ -542,7 +551,7 @@ export async function fetchAssessmentData(karyawanId, periode) {
         supabase.from('penilaian_summary').select('catatan_kpi, penilai_id').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.from('kpi_summary_recommendations').select('id, rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId, p_periode: periode }),
-        supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId }) // <-- RPC IS BACK!
+        supabase.rpc('get_kpi_score_history', { p_karyawan_id: karyawanId }) 
     ]);
     
     console.log("=== CCTV DATA REZA DARI SUPABASE ===");
@@ -560,6 +569,15 @@ export async function fetchAssessmentData(karyawanId, periode) {
             }
         });
     }
+
+    // ✅ PERBAIKAN 2: Filter Cerdas "Hantu Soft-Delete" di sini!
+    // Memastikan kpis yang digunakan ke bawah adalah yang sudah bersih
+    const kpis = (rawKpis || []).filter(kpi => {
+        if (kpi.is_active) return true;
+        // Cek apakah dia punya riwayat nilai di periode ini (oleh assessor siapapun)
+        const isScored = allScoresResult.data?.some(s => s.kpi_master_id === kpi.id);
+        return isScored;
+    });
 
     let finalGeneralNote = '';
     if (allSummaryResult.data && allSummaryResult.data.length > 0) {
@@ -696,17 +714,16 @@ export async function fetchAssessmentData(karyawanId, periode) {
     });
 
     return {
-        kpis: kpis || [],
+        kpis: kpis || [], // <-- Kpis ini sekarang sudah membawa KPI hantu yang bangkit!
         scores: scoresMap,
         generalNote: finalGeneralNote, 
         recommendations: recommendationsResult.data || [],
         areaScores: safeAreaScores, 
-        kpiHistory: safeHistory, // <-- KEMBALI NORMAL & BEBAS BUG!
+        kpiHistory: safeHistory, 
         gapWarnings: gapWarnings,
         isDataFound: Object.keys(scoresMap).length > 0
     };
 }
-
 export async function saveFullAssessment(formData) {
     const supabase = await createClient(); 
     
