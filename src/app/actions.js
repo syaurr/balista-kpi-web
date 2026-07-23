@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import * as XLSX from 'xlsx';
 // --- AWAL PERBAIKAN: Import library standar Supabase untuk admin client ---
 import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
 // --- AKHIR PERBAIKAN ---
 
 
@@ -476,7 +477,6 @@ export async function getAssessmentDataLogic(supabase, karyawanId, periode) {
         return { kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [] };
     }
     
-    // Kita kembali gunakan RPC yang sudah terbukti benar untuk chart
     const [kpisResult, scoresResult, summaryResult, recommendationsResult, areaScoresResult] = await Promise.all([
         // ❌ PERBAIKAN 1: Hapus .eq('is_active', true) agar KPI non-aktif ikut tersedot
         supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', karyawan.posisi).order('area_kerja'),
@@ -486,6 +486,7 @@ export async function getAssessmentDataLogic(supabase, karyawanId, periode) {
         supabase.rpc('get_average_scores_by_area', { p_karyawan_id: karyawanId }) 
     ]);
 
+    // Bikin mapping nilai dulu biar gampang dicari
     const scoresMap = scoresResult.data?.reduce((acc, score) => {
         acc[score.kpi_master_id] = score.nilai;
         return acc;
@@ -711,6 +712,13 @@ export async function fetchAssessmentData(karyawanId, periode) {
     safeHistory.sort((a, b) => {
         if (!a.periode_sortable || !b.periode_sortable) return 0;
         return a.periode_sortable.localeCompare(b.periode_sortable);
+    });
+
+    // 4. FILTER CERDAS "HANTU SOFT-DELETE" (Ini sudah benar buatan Kakak!)
+    const rawKpis = kpisResult.data || [];
+    const filteredKpis = rawKpis.filter(kpi => {
+        if (kpi.is_active) return true; 
+        return scoresMap[kpi.id] !== undefined; 
     });
 
     return {
