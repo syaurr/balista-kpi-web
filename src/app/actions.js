@@ -714,13 +714,6 @@ export async function fetchAssessmentData(karyawanId, periode) {
         return a.periode_sortable.localeCompare(b.periode_sortable);
     });
 
-    // 4. FILTER CERDAS "HANTU SOFT-DELETE" (Ini sudah benar buatan Kakak!)
-    const rawKpis = kpisResult.data || [];
-    const filteredKpis = rawKpis.filter(kpi => {
-        if (kpi.is_active) return true; 
-        return scoresMap[kpi.id] !== undefined; 
-    });
-
     return {
         kpis: kpis || [], // <-- Kpis ini sekarang sudah membawa KPI hantu yang bangkit!
         scores: scoresMap,
