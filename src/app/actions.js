@@ -501,6 +501,20 @@ export async function fetchAssessmentData(karyawanId, periode) {
         return { kpis: [], scores: {}, generalNote: '', recommendations: [], areaScores: [], kpiHistory: [] };
     }
 
+    // 1. MATA-MATA JABATAN: Cari tahu KPI apa saja yang SUDAH PUNYA NILAI di bulan ini
+    const { data: existingScores } = await supabase.from('penilaian_kpi')
+        .select('kpi_master_id')
+        .eq('karyawan_id', karyawanId)
+        .eq('periode', periode);
+    
+    const scoredIds = existingScores?.map(s => s.kpi_master_id) || [];
+    
+    // 2. BIKIN SURAT IZIN: "Posisi sekarang ATAU yang sudah pernah dinilai"
+    let kpiFilter = `posisi.eq."${karyawan.posisi}"`;
+    if (scoredIds.length > 0) {
+        kpiFilter = `${kpiFilter},id.in.(${scoredIds.join(',')})`;
+    }
+
     const [
         kpisResult, 
         scoresResult, 
@@ -509,8 +523,9 @@ export async function fetchAssessmentData(karyawanId, periode) {
         areaScoresResult,
         kpiHistoryResult 
     ] = await Promise.all([
-        // ❌ PERBAIKAN 1: Hapus .eq('is_active', true)
-        supabase.from('kpi_master').select('*, kpi_links(id, link_url)').eq('posisi', karyawan.posisi).order('area_kerja'),
+        // 3. EKSEKUSI: Gunakan .or(kpiFilter) sebagai ganti .eq('posisi', ...)
+        supabase.from('kpi_master').select('*, kpi_links(id, link_url)').or(kpiFilter).order('area_kerja'),
+        
         supabase.from('penilaian_kpi').select('kpi_master_id, nilai').eq('karyawan_id', karyawanId).eq('periode', periode),
         supabase.from('penilaian_summary').select('catatan_kpi').eq('karyawan_id', karyawanId).eq('periode', periode).single(),
         supabase.from('kpi_summary_recommendations').select('id, rekomendasi_text').eq('karyawan_id', karyawanId).eq('periode', periode),
@@ -525,16 +540,15 @@ export async function fetchAssessmentData(karyawanId, periode) {
         return acc;
     }, {}) || {};
 
-    // ✅ PERBAIKAN 2: Filter Cerdas "Hantu Soft-Delete"
+    // 4. FILTER CERDAS "HANTU SOFT-DELETE" (Ini sudah benar buatan Kakak!)
     const rawKpis = kpisResult.data || [];
     const filteredKpis = rawKpis.filter(kpi => {
-        if (kpi.is_active) return true; // Kalau aktif, lolos
-        // Kalau non-aktif tapi pernah dinilai di periode ini, bangkitkan hantunya!
+        if (kpi.is_active) return true; 
         return scoresMap[kpi.id] !== undefined; 
     });
 
     return {
-        kpis: filteredKpis, // <-- Gunakan KPI hasil filter cerdas
+        kpis: filteredKpis, 
         scores: scoresMap,
         generalNote: summaryResult.data?.catatan_kpi || '',
         recommendations: recommendationsResult.data || [],
