@@ -1,7 +1,7 @@
 import { createClient } from '../utils/supabase/server';
 
 export async function getDashboardData() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { user: null, data: null, error: 'User not authenticated' };
 

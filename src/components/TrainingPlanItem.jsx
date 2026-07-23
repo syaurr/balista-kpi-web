@@ -22,7 +22,7 @@ export default function TrainingPlanItem({ plan, viewOnly = false }) {
 
     const handleProgressSubmit = async (formData) => {
         setLoading(true);
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
             alert('Sesi Anda berakhir, silakan login kembali.');

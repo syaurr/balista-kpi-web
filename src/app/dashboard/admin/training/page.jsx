@@ -1,11 +1,12 @@
 // --- AWAL PERBAIKAN: Perbaiki semua path import ---
 import { createClient } from '../../../../utils/supabase/server';
-import { cookies } from 'next/headers';
+// import { cookies } from 'next/headers'; <-- INI SUDAH TIDAK PERLU LAGI
 import TrainingManagementClient from '../../../../components/TrainingManagementClient';
 // --- AKHIR PERBAIKAN ---
 
 async function getTrainingAdminData() {
-    const supabase = createClient(cookies());
+    // KUNCI PERBAIKAN: Tambahkan 'await' dan kosongkan dalam kurungnya!
+    const supabase = await createClient();
 
     const [trainingsResult, positionsResult, areasResult] = await Promise.all([
         // Ambil data training beserta link areanya

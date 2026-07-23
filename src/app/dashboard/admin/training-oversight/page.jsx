@@ -1,9 +1,10 @@
 import { createClient } from '../../../../utils/supabase/server';
-import { cookies } from 'next/headers';
+// import { cookies } from 'next/headers'; <-- SUDAH TIDAK PERLU
 import TrainingOversightClient from '../../../../components/TrainingOversightClient';
 
 async function getOversightData() {
-    const supabase = createClient(cookies());
+    // 💡 KUNCI PERBAIKAN: Tambahkan 'await' dan kosongkan kurungnya
+    const supabase = await createClient();
     
     // --- PERBAIKAN QUERY: Sertakan pengambilan data 'training_progress_updates' ---
     const { data: plans, error } = await supabase
@@ -29,7 +30,7 @@ async function getOversightData() {
         console.error("Error fetching oversight data:", error);
         return [];
     }
-    return plans;
+    return plans || [];
 }
 
 export default async function TrainingOversightPage() {

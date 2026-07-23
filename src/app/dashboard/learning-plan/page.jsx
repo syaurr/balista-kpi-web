@@ -10,6 +10,9 @@ export default function LearningPlanPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     
+    // Panggil supabase client di sini secara sinkronus (TIDAK PAKAI AWAIT)
+    const supabase = createClient();
+    
     // --- State Management ---
     const [plans, setPlans] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -22,22 +25,20 @@ export default function LearningPlanPage() {
 
     // --- Pengambilan Data di Sisi Klien ---
     useEffect(() => {
-        const supabase = createClient();
-        
         async function getLearningPlanData() {
             setLoading(true);
             
-            // 1. Dapatkan user yang login
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
+            // 1. Dapatkan user yang login dengan aman
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError || !user) {
                 setLoading(false);
                 router.push('/login');
                 return;
             }
             
             // 2. Dapatkan profil karyawan untuk ID yang benar
-            const { data: karyawan } = await supabase.from('karyawan').select('id').eq('email', user.email).single();
-            if (!karyawan) {
+            const { data: karyawan, error: profileError } = await supabase.from('karyawan').select('id').eq('email', user.email).single();
+            if (profileError || !karyawan) {
                 setLoading(false);
                 setPlans([]);
                 return;
@@ -62,7 +63,7 @@ export default function LearningPlanPage() {
         }
 
         getLearningPlanData();
-    }, [periode, router]); // <-- Jalankan ulang setiap kali 'periode' berubah
+    }, [periode, router, supabase]); // <-- supabase dimasukkan ke dependency array
 
     const handlePeriodChange = () => {
         router.push(`/dashboard/learning-plan?bulan=${month}&tahun=${year}`);

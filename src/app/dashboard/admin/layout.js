@@ -1,17 +1,20 @@
+// src/app/dashboard/admin/layout.js
 import { createClient } from '../../../utils/supabase/server';
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 export default async function AdminLayout({ children }) {
-  const supabase = createClient(cookies());
+  // --- PERBAIKAN: Tambahkan 'await' di sini ---
+  // Kita tidak perlu lagi oper cookies() karena sudah di-handle di dalam server.js
+  const supabase = await createClient(); 
 
-  // 1. Cek sesi login
+  // Sekarang 'supabase' sudah jadi objek asli, baris di bawah ini pasti jalan
   const { data: { user } } = await supabase.auth.getUser();
+  
   if (!user) {
     redirect('/login');
   }
 
-  // 2. Cek peran (role) pengguna dari tabel 'karyawan'
+  // 2. Cek peran (role) pengguna
   const { data: karyawan } = await supabase
     .from('karyawan')
     .select('role')
@@ -20,18 +23,20 @@ export default async function AdminLayout({ children }) {
 
   const isAdmin = karyawan?.role === 'Admin';
 
-  // 3. Jika bukan admin, tampilkan pesan "Akses Ditolak"
+  // 3. Proteksi akses
   if (!isAdmin) {
     return (
-        <div className="flex-grow flex items-center justify-center">
-            <div className="text-center p-8 bg-white rounded-xl shadow-md">
+        <div className="flex-grow flex items-center justify-center min-h-[60vh]">
+            <div className="text-center p-8 bg-white rounded-xl shadow-md border-2 border-red-100">
                 <h1 className="text-2xl font-bold text-red-600">Akses Ditolak</h1>
-                <p className="text-gray-600 mt-2">Anda tidak memiliki hak akses untuk membuka halaman ini.</p>
+                <p className="text-gray-600 mt-2">Maaf kak, area ini cuma buat Admin Balista aja. 🙏</p>
+                <div className="mt-4">
+                  <a href="/dashboard" className="btn btn-sm btn-ghost text-teal-700 underline">Kembali ke Dashboard</a>
+                </div>
             </div>
         </div>
     );
   }
 
-  // 4. Jika admin, tampilkan konten halaman admin
   return <>{children}</>;
 }

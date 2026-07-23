@@ -1,10 +1,11 @@
 import { createClient } from '../../../utils/supabase/server';
-import { cookies } from 'next/headers';
 import CommunityClient from '../../../components/CommunityClient';
 import { redirect } from 'next/navigation';
 
 async function getCommunityData() {
-    const supabase = createClient(cookies());
+    // KUNCI PERBAIKAN: Tinggal pakai await, tanpa perlu masukkan cookies()
+    const supabase = await createClient();
+    
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) return { error: 'Not authenticated' };
 
@@ -15,7 +16,6 @@ async function getCommunityData() {
         badgesResult
     ] = await Promise.all([
         supabase.from('karyawan').select('id, nama, posisi, xp, level').eq('email', authUser.email).single(),
-        // --- PERBAIKAN QUERY: Pastikan 'karyawan_training_plan' mengambil semua detail progres ---
         supabase.from('karyawan').select(`
             id, nama, posisi, 
             karyawan_training_plan (
@@ -42,7 +42,6 @@ async function getCommunityData() {
         error: null
     };
 }
-
 
 export default async function CommunityPage() {
     const { error, ...data } = await getCommunityData();
