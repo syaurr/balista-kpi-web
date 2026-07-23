@@ -556,7 +556,6 @@ export async function fetchAssessmentData(karyawanId, periode) {
         kpiHistory: kpiHistoryResult.data || [] 
     };
 }
-
 export async function getDashboardData() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
